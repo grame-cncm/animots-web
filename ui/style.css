@@ -75,7 +75,7 @@ select, input { width: 100%; padding: 6px 8px; border: 1px solid var(--bord); bo
 button { padding: 8px 14px; border: 1px solid var(--bord); border-radius: 6px; background: var(--fond); cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--doux); }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button:disabled { cursor: not-allowed; }
+button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* Démarrer / Arrêter : le bouton utilisable est plein et coloré, l'autre est estompé.
    L'état vient de #commandes[data-etat], fixé par app.js (showState). */
@@ -100,8 +100,6 @@ button:disabled { cursor: not-allowed; }
 }
 .commande:not(:disabled):hover { filter: brightness(1.08); }
 .commande:not(:disabled):active { transform: translateY(1px); }
-/* pendant un essai, Démarrer reste possible mais secondaire : contour vert au lieu d'un fond plein */
-.commandes[data-etat="unique"] .demarrer { background: transparent; color: var(--accent); }
 /* installation en cours : Démarrer, grisé, dit « En cours » avec un voyant qui pulse */
 .commandes[data-etat="boucle"] .demarrer .icone { clip-path: none; border-radius: 50%; background: var(--accent); opacity: 1; animation: pulsation 1.6s ease-in-out infinite; }
 .commandes[data-etat="boucle"] .demarrer:disabled { opacity: .8; color: var(--accent); border-color: var(--accent); }

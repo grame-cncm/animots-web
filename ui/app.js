@@ -150,11 +150,12 @@ let currentEssai = '';
 
 /**
  * Montre l'état du lecteur : ligne d'état, et boutons de lecture utilisables ou non.
- * - À l'arrêt : Démarrer est le bouton principal, Arrêter est grisé.
- * - Installation en cours : Démarrer est grisé (et dit « En cours »), Arrêter devient le bouton
- *   principal, en rouge.
- * - Essai en cours : Arrêter est principal ; Démarrer reste utilisable (il remplace l'essai par
- *   l'installation), et le bouton de l'essai qui joue est marqué.
+ * Une seule règle : quand rien ne joue, Démarrer est le seul bouton de lecture utilisable ; dès
+ * que quelque chose joue (installation ou essai), c'est Arrêter, en rouge, et Démarrer est grisé.
+ * - Installation en cours : Démarrer dit « En cours », et les essais sont grisés aussi (un essai
+ *   arrêterait l'installation sans le dire).
+ * - Essai en cours : le bouton de l'essai qui joue est marqué ; les autres essais restent
+ *   utilisables, pour passer de l'un à l'autre.
  * Le focus clavier passe au bouton qui devient utilisable quand celui qui l'avait est grisé.
  * @param {'arrêt'|'boucle'|'unique'} state
  * @returns {void}
@@ -166,7 +167,7 @@ function showState(state) {
   const start = /** @type {HTMLButtonElement} */ ($('demarrer'));
   const stop = /** @type {HTMLButtonElement} */ ($('arreter'));
   const focused = document.activeElement;
-  start.disabled = state === 'boucle';
+  start.disabled = state !== 'arrêt';
   stop.disabled = state === 'arrêt';
   /** @type {HTMLElement} */ (start.querySelector('.libelle')).textContent = state === 'boucle' ? 'En cours' : 'Démarrer';
   if (focused === start && start.disabled) stop.focus();
@@ -174,6 +175,7 @@ function showState(state) {
   if (state !== 'unique') currentEssai = '';
   for (const b of document.querySelectorAll('[data-essai]')) {
     b.setAttribute('aria-pressed', String(state === 'unique' && /** @type {HTMLElement} */ (b).dataset.essai === currentEssai));
+    /** @type {HTMLButtonElement} */ (b).disabled = state === 'boucle';
   }
 }
 /** Heure du dernier battement de l'ordonnanceur : un battement qui s'arrête trahit un Worker mort. */
