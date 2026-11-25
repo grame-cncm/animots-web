@@ -8,9 +8,9 @@ Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2
 |---|---|---|
 | 1 | Noyau des générateurs, rythmes, outils et données de Gerland, tests | **fait** |
 | 2 | `prorythme`, `gnotes`, `n-prorythme`, `n-gnotes`, partition, export `.mid` | **fait** |
-| 3 | Transpileur, 36 séquences et 6 essais générés, enchaînement des parties | **fait** (186 tests en tout) |
+| 3 | Transpileur, 36 séquences et 6 essais générés, enchaînement des parties | **fait** |
 | 4 | Validation de fidélité (statistiques, écoute) | à faire |
-| 5 | Lecteur Web MIDI et interface | à faire |
+| 5 | Lecteur Web MIDI et interface | **fait** (194 tests en tout) ; essayé en sortie simulée, pas encore avec Kontakt |
 | 6 | Exploitation continue (kiosque ou Node) | à faire |
 
 ## Lancer les tests
@@ -20,6 +20,28 @@ Il faut Node 20 ou plus récent. Le projet n'a aucune dépendance.
 ```bash
 npm test
 ```
+
+## Jouer l'installation vers Kontakt 8
+
+1. **Bus MIDI.** Dans Configuration audio et MIDI (fenêtre Studio MIDI), ouvrir le pilote IAC, cocher « Le gestionnaire est en ligne », et créer deux ports : `Animots A` et `Animots B`.
+2. **Kontakt 8 en mode autonome** (pas en greffon, qui ne reçoit que 16 canaux) : charger le multi. Dans Options, onglet MIDI, rubrique Inputs, mettre `Animots A` sur le port A et `Animots B` sur le port B.
+3. **Lecteur** :
+
+   ```bash
+   npm run serve
+   ```
+
+   Ouvrir `http://localhost:8080/ui/` dans **Chrome ou Edge**, accepter l'accès MIDI, puis choisir `Animots A` pour le port A et `Animots B` pour le port B. Le choix est mémorisé.
+4. **Démarrer** lance la boucle des parties, avec une graine aléatoire ou celle saisie. **Cercle1**, **Cercle2**, **Tutti** et **Alterne** jouent les essais de réglage. **Arrêter** coupe tout.
+
+Sans sortie choisie, la lecture est simulée : rien ne sonne, mais les 16 enceintes s'allument à l'écran quand leur canal joue. Le journal note chaque partie avec l'état de l'aléa au moment de son calcul. **Exporter la partie en cours** télécharge le `.mid` de ce qui joue.
+
+### Fonctionnement du lecteur
+
+- **Anticipation.** L'ordonnanceur (`output/player.js`) envoie les messages une seconde à l'avance, avec leur heure exacte : le Web MIDI les joue à l'heure, même si le battement prend du retard. Le battement vient d'un Worker, qui résiste mieux au bridage des onglets en arrière-plan qu'un `setInterval` de la page.
+- **Enchaînement.** La partie suivante est calculée dès le début de la partie courante, puis placée exactement à sa fin.
+- **Arrêt.** L'ordonnanceur envoie un note-off pour chaque note active, puis CC123 et CC120 sur tous les canaux, deux fois : tout de suite, puis après la fenêtre d'anticipation, pour couper aussi les notes déjà programmées.
+- **Essais.** Ils remplacent ce qui joue et s'arrêtent à leur fin. En 2013, le bouton remplaçait la partie, mais la minuterie de la partie suivante restait armée.
 
 ## Exporter une séquence en fichier MIDI
 
@@ -72,10 +94,17 @@ transpiler/
   emit.js                 traduction des séquences et des essais en JavaScript
   generate.js             production des fichiers de piece/gerland/sequences/
 output/
+  player.js               ordonnanceur : anticipation, enchaînement des parties, notes actives, arrêt
+  webmidi.js              sortie Web MIDI (ports A et B reliés à des sorties du système)
+  simulated.js            sortie simulée (aucun son, sert à l'affichage et aux essais)
+  ticker.js, ticker-worker.js  battement de l'ordonnanceur (Worker, ou setInterval en repli)
   smf.js                  export en fichier MIDI standard, et relecture pour vérification
+ui/
+  index.html, app.js, style.css  page du lecteur (remplace la fenêtre CAPI « Animots »)
 scripts/
   export-mid.js           calcule une séquence ou un essai et l'exporte en .mid
   transpile.js            régénère les séquences depuis source/ (--check : vérifie seulement)
+  serve.js                serveur local de la page (127.0.0.1, port 8080 par défaut)
 tests/                    tests node:test, dont un test qui impose la documentation du code
   oracle-sequences.js     séquences 2 et 3 traduites à la main, référence du transpileur
 out/                      fichiers .mid produits (peut être effacé)

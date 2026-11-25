@@ -83,6 +83,8 @@ export class Score {
     this.label = '';
     /** @type {Array<string>} Anomalies relevées (valeurs MIDI hors limites...). */
     this.warnings = [];
+    /** @type {{no?: number, state?: number} | null} Données de l'appelant : numéro de partie, état de l'aléa... */
+    this.meta = null;
   }
 
   /**
@@ -198,17 +200,31 @@ export class Score {
 
   /**
    * Convertit une date en secondes d'après les tempos de la partition (60 par défaut).
+   * Pour convertir beaucoup de dates, préférer {@link Score#timeline}, qui ne lit les tempos
+   * qu'une fois.
    * @param {number} tick
    * @returns {number}
    */
-  seconds(tick) {
+  seconds(tick) { return this.timeline()(tick); }
+
+  /**
+   * Fonction de conversion ticks -> secondes, figée sur les tempos actuels de la partition.
+   * @returns {(tick: number) => number}
+   */
+  timeline() {
     const tempos = /** @type {Array<ControlEvent>} */ (this.events.filter((e) => e.type === 'tempo')).sort((a, b) => a.tick - b.tick);
-    let t = 0, last = 0, bpm = 60;
+    // segments : [tick de début, secondes au début, bpm]
+    const segs = [[0, 0, 60]];
     for (const e of tempos) {
-      if (e.tick >= tick) break;
-      t += ((e.tick - last) / PPQ) * (60 / bpm);
-      last = e.tick; bpm = e.bpm;
+      const [t0, s0, bpm] = segs[segs.length - 1];
+      if (e.tick === t0) segs[segs.length - 1] = [t0, s0, e.bpm];
+      else segs.push([e.tick, s0 + ((e.tick - t0) / PPQ) * (60 / bpm), e.bpm]);
     }
-    return t + ((tick - last) / PPQ) * (60 / bpm);
+    return (tick) => {
+      let k = segs.length - 1;
+      while (k > 0 && segs[k][0] > tick) k--;
+      const [t0, s0, bpm] = segs[k];
+      return s0 + ((tick - t0) / PPQ) * (60 / bpm);
+    };
   }
 }

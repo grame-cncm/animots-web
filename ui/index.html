@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Animots Gerland</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Animots <span>Parc de Gerland, 2013</span></h1>
+    <p id="etat" class="etat" data-etat="arrêt">À l'arrêt</p>
+  </header>
+
+  <main>
+    <section class="panneau" aria-labelledby="t-sortie">
+      <h2 id="t-sortie">Sortie MIDI</h2>
+      <p id="midi-statut" class="note">Recherche des sorties MIDI…</p>
+      <div class="ports">
+        <label>Port A <select id="port-a"></select></label>
+        <label>Port B <select id="port-b"></select></label>
+      </div>
+      <p class="note">Sans sortie choisie, la lecture est simulée : rien ne sonne, mais les enceintes s'allument.</p>
+    </section>
+
+    <section class="panneau" aria-labelledby="t-lecture">
+      <h2 id="t-lecture">Lecture</h2>
+      <div class="boutons">
+        <button id="demarrer" class="principal">Démarrer</button>
+        <button id="arreter">Arrêter</button>
+      </div>
+      <div class="boutons essais" role="group" aria-label="Essais des enceintes">
+        <button data-essai="cercle1">Cercle1</button>
+        <button data-essai="cercle2">Cercle2</button>
+        <button data-essai="tutti">Tutti</button>
+        <button data-essai="alterne">Alterne</button>
+      </div>
+      <label class="graine">Graine <input id="graine" inputmode="numeric" placeholder="aléatoire"></label>
+    </section>
+
+    <section class="panneau large" aria-labelledby="t-encours">
+      <h2 id="t-encours">En cours</h2>
+      <div class="encours">
+        <div><span class="etiquette">Partie</span><strong id="partie">—</strong></div>
+        <div><span class="etiquette">Séquence</span><strong id="sequence">—</strong></div>
+        <div><span class="etiquette">Durée en cours</span><strong id="duree">—</strong></div>
+        <div><span class="etiquette">Durée totale</span><strong id="duree-totale">—</strong></div>
+      </div>
+      <div id="enceintes" class="enceintes" aria-label="Enceintes qui jouent"></div>
+      <p class="note legende"><span class="pastille a"></span> port A <span class="pastille b"></span> port B</p>
+      <button id="exporter">Exporter la partie en cours (.mid)</button>
+    </section>
+
+    <section class="panneau large" aria-labelledby="t-journal">
+      <h2 id="t-journal">Journal</h2>
+      <ol id="journal" class="journal"></ol>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
