@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>Animots <span>Parc de Gerland, 2013</span></h1>
-    <p id="etat" class="etat" data-etat="arrêt">À l'arrêt</p>
+    <p id="etat" class="etat" data-etat="arrêt" role="status"><span class="voyant" aria-hidden="true"></span><span id="etat-texte">À l'arrêt</span></p>
     <p id="version" class="note version"></p>
   </header>
 
@@ -26,11 +26,12 @@
 
     <section class="panneau" aria-labelledby="t-lecture">
       <h2 id="t-lecture">Lecture</h2>
-      <div class="boutons">
-        <button id="demarrer" class="principal">Démarrer</button>
-        <button id="arreter">Arrêter</button>
+      <div class="boutons commandes" id="commandes" data-etat="arrêt">
+        <button id="demarrer" class="commande demarrer"><span class="icone" aria-hidden="true"></span><span class="libelle">Démarrer</span></button>
+        <button id="arreter" class="commande arreter" disabled><span class="icone" aria-hidden="true"></span><span class="libelle">Arrêter</span></button>
       </div>
       <div class="boutons essais" role="group" aria-label="Essais des enceintes">
+        <span class="etiquette essais-titre">Essais</span>
         <button data-essai="cercle1">Cercle1</button>
         <button data-essai="cercle2">Cercle2</button>
         <button data-essai="tutti">Tutti</button>

@@ -142,11 +142,40 @@ const player = new Player({
     journal(`${meta.no ? `partie ${meta.no} : ` : ''}${score.label}, ${mmss(score.seconds(score.end) * 1000)}`
       + `${meta.state !== undefined ? `, aléa ${meta.state.toString(16)}` : ''}${extra}`, score.warnings.length > 0);
   },
-  onState(state) {
-    $('etat').dataset.etat = state;
-    $('etat').textContent = { arrêt: 'À l’arrêt', boucle: 'Installation en cours', unique: 'Essai en cours' }[state];
-  },
+  onState: showState,
 });
+
+/** Essai lancé en dernier : son bouton reste marqué tant que l'essai joue. */
+let currentEssai = '';
+
+/**
+ * Montre l'état du lecteur : ligne d'état, et boutons de lecture utilisables ou non.
+ * - À l'arrêt : Démarrer est le bouton principal, Arrêter est grisé.
+ * - Installation en cours : Démarrer est grisé (et dit « En cours »), Arrêter devient le bouton
+ *   principal, en rouge.
+ * - Essai en cours : Arrêter est principal ; Démarrer reste utilisable (il remplace l'essai par
+ *   l'installation), et le bouton de l'essai qui joue est marqué.
+ * Le focus clavier passe au bouton qui devient utilisable quand celui qui l'avait est grisé.
+ * @param {'arrêt'|'boucle'|'unique'} state
+ * @returns {void}
+ */
+function showState(state) {
+  $('etat').dataset.etat = state;
+  $('etat-texte').textContent = { arrêt: 'À l’arrêt', boucle: 'Installation en cours', unique: 'Essai en cours' }[state];
+  $('commandes').dataset.etat = state;
+  const start = /** @type {HTMLButtonElement} */ ($('demarrer'));
+  const stop = /** @type {HTMLButtonElement} */ ($('arreter'));
+  const focused = document.activeElement;
+  start.disabled = state === 'boucle';
+  stop.disabled = state === 'arrêt';
+  /** @type {HTMLElement} */ (start.querySelector('.libelle')).textContent = state === 'boucle' ? 'En cours' : 'Démarrer';
+  if (focused === start && start.disabled) stop.focus();
+  if (focused === stop && stop.disabled) start.focus();
+  if (state !== 'unique') currentEssai = '';
+  for (const b of document.querySelectorAll('[data-essai]')) {
+    b.setAttribute('aria-pressed', String(state === 'unique' && /** @type {HTMLElement} */ (b).dataset.essai === currentEssai));
+  }
+}
 /** Heure du dernier battement de l'ordonnanceur : un battement qui s'arrête trahit un Worker mort. */
 let lastBeat = performance.now();
 const ticker = startTicker(() => { lastBeat = performance.now(); player.tick(); }, 25);
@@ -247,6 +276,8 @@ for (const b of document.querySelectorAll('[data-essai]')) {
     sharedGenerators.reset();
     ESSAIS[name](score);
     player.playOnce(score);
+    currentEssai = name; // après playOnce, dont l'arrêt préalable efface l'essai précédent
+    showState(player.state);
   });
 }
 

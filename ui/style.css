@@ -10,6 +10,8 @@
   --port-a: #2f6b4f;
   --port-b: #b5651d;
   --eteint: #e9e6de;
+  --arret: #b2382b;
+  --arret-texte: #ffffff;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -24,6 +26,8 @@
     --port-a: #5aa37f;
     --port-b: #e0954e;
     --eteint: #30332e;
+    --arret: #e0665a;
+    --arret-texte: #1f0c09;
     color-scheme: dark;
   }
 }
@@ -58,7 +62,9 @@ main {
 .panneau { background: var(--panneau); border: 1px solid var(--bord); border-radius: 10px; padding: 16px; }
 .large { grid-column: 1 / -1; }
 .note { color: var(--doux); font-size: 13px; margin: 8px 0 0; }
-.etat { margin: 0; font-weight: 600; }
+.etat { margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.voyant { width: 10px; height: 10px; border-radius: 50%; background: var(--bord); }
+.etat:not([data-etat="arrêt"]) .voyant { background: var(--accent); animation: pulsation 1.6s ease-in-out infinite; }
 .version { margin: 0; width: 100%; }
 .etat[data-etat="boucle"], .etat[data-etat="unique"] { color: var(--accent); }
 .ports { display: grid; gap: 8px; margin-top: 8px; }
@@ -67,8 +73,44 @@ select, input, button { font: inherit; color: inherit; }
 select, input { width: 100%; padding: 6px 8px; border: 1px solid var(--bord); border-radius: 6px; background: var(--fond); }
 .boutons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 button { padding: 8px 14px; border: 1px solid var(--bord); border-radius: 6px; background: var(--fond); cursor: pointer; }
-button:hover { border-color: var(--doux); }
-button.principal { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); font-weight: 600; }
+button:hover:not(:disabled) { border-color: var(--doux); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { cursor: not-allowed; }
+
+/* Démarrer / Arrêter : le bouton utilisable est plein et coloré, l'autre est estompé.
+   L'état vient de #commandes[data-etat], fixé par app.js (showState). */
+.commandes { gap: 10px; }
+.commande {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-width: 132px; justify-content: center;
+  padding: 11px 18px; font-size: 16px; font-weight: 600; border-width: 2px;
+  transition: background-color .15s, color .15s, border-color .15s, opacity .15s, box-shadow .15s;
+}
+.commande .icone { width: 12px; height: 12px; background: currentColor; flex: none; }
+.demarrer .icone { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.arreter .icone { border-radius: 2px; }
+.commande:disabled {
+  background: transparent; color: var(--doux); border-color: var(--bord); border-style: dashed;
+  opacity: .55; box-shadow: none;
+}
+.demarrer:not(:disabled) { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
+.arreter:not(:disabled) {
+  background: var(--arret); color: var(--arret-texte); border-color: var(--arret);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--arret) 22%, transparent);
+}
+.commande:not(:disabled):hover { filter: brightness(1.08); }
+.commande:not(:disabled):active { transform: translateY(1px); }
+/* pendant un essai, Démarrer reste possible mais secondaire : contour vert au lieu d'un fond plein */
+.commandes[data-etat="unique"] .demarrer { background: transparent; color: var(--accent); }
+/* installation en cours : Démarrer, grisé, dit « En cours » avec un voyant qui pulse */
+.commandes[data-etat="boucle"] .demarrer .icone { clip-path: none; border-radius: 50%; background: var(--accent); opacity: 1; animation: pulsation 1.6s ease-in-out infinite; }
+.commandes[data-etat="boucle"] .demarrer:disabled { opacity: .8; color: var(--accent); border-color: var(--accent); }
+@keyframes pulsation { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+/* essais : celui qui joue est marqué */
+.essais { align-items: center; }
+.essais-titre { flex-basis: 100%; }
+.essais button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent); }
 .encours { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .etiquette { display: block; font-size: 12px; color: var(--doux); }
 .encours strong { font-size: 18px; font-variant-numeric: tabular-nums; }
@@ -98,6 +140,8 @@ button.principal { background: var(--accent); color: var(--accent-texte); border
 }
 @media (prefers-reduced-motion: reduce) {
   .enceinte.attaque { animation-name: attaque-doux; }
+  .voyant, .commande .icone { animation: none !important; }
+  .commande { transition: none; }
 }
 @keyframes attaque-doux {
   0% { box-shadow: 0 0 0 3px var(--flash); }
