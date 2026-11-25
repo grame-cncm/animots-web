@@ -84,7 +84,7 @@ Les versions plus récentes (2015, 2017), d'où le portage était parti, n'en di
    puis ouvrir `http://localhost:8080/ui/`. Dans les deux cas, accepter l'accès MIDI, puis choisir `Animots A` pour le port A et `Animots B` pour le port B. Le choix est mémorisé.
 4. **Démarrer** lance la boucle des parties, avec une graine aléatoire ou celle saisie. **Cercle1**, **Cercle2**, **Tutti** et **Alterne** jouent les essais de réglage. **Arrêter** coupe tout.
 
-Sans sortie choisie, la lecture est simulée : rien ne sonne, mais les 16 enceintes s'allument à l'écran quand leur canal joue. Le journal note chaque partie avec l'état de l'aléa au moment de son calcul. **Exporter la partie en cours** télécharge le `.mid` de ce qui joue.
+Sans sortie choisie, la lecture est simulée : rien ne sonne, mais l'écran montre quand même les 16 enceintes. Chacune reste colorée tant qu'une note y est tenue (vert : port A, orange : port B), et clignote à chaque attaque de note. Le clignotement apparaît même quand la note précédente n'est pas finie, comme dans Tutti où les notes s'enchaînent sans silence. Si le système demande de réduire les animations, seul l'anneau coloré apparaît, sans agrandissement. Le journal note chaque partie avec l'état de l'aléa au moment de son calcul. **Exporter la partie en cours** télécharge le `.mid` de ce qui joue.
 
 ### Fonctionnement du lecteur
 

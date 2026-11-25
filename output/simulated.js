@@ -47,6 +47,21 @@ export class SimulatedSink {
   ports() { return this.connected; }
 
   /**
+   * Attaques (note-on) dont l'heure tombe dans l'intervalle ]t0, t1], par canal. Sert à faire
+   * clignoter une enceinte à chaque attaque, même quand la note précédente est encore tenue.
+   * @param {number} t0 Début exclu (ms).
+   * @param {number} t1 Fin incluse (ms).
+   * @returns {Set<string>} Clés « port:canal » des canaux qui attaquent une note.
+   */
+  onsetsBetween(t0, t1) {
+    const out = new Set();
+    for (const m of this.messages) {
+      if (m.time > t0 && m.time <= t1 && (m.data[0] & 0xf0) === 0x90 && m.data[2] > 0) out.add(`${m.port}:${m.data[0] & 15}`);
+    }
+    return out;
+  }
+
+  /**
    * Notes qui sonnent à un instant donné, d'après les messages reçus.
    * @param {number} t Heure (ms).
    * @returns {Set<string>} Clés « port:canal » des canaux qui jouent.

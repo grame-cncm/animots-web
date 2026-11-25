@@ -196,9 +196,40 @@ for (let n = 0; n < 16; n++) {
   cell.className = 'enceinte';
   cell.innerHTML = `<span>${n + 1}</span>`;
   cell.title = `Enceinte ${n + 1} : canal ${n + 1} des ports A et B`;
+  cell.addEventListener('animationend', () => cell.classList.remove('attaque'));
   $('enceintes').append(cell);
   cells.push(cell);
 }
+
+/**
+ * Fait clignoter une enceinte : relance l'animation `attaque`, à la couleur du port.
+ * @param {HTMLElement} cell
+ * @param {number} port 0 (A) ou 1 (B).
+ * @returns {void}
+ */
+function flash(cell, port) {
+  cell.style.setProperty('--flash', port === 0 ? 'var(--port-a)' : 'var(--port-b)');
+  cell.classList.remove('attaque');
+  void cell.offsetWidth; // force le navigateur à oublier l'animation en cours, pour la rejouer
+  cell.classList.add('attaque');
+}
+
+// Attaques : à chaque image, les note-on tombés depuis l'image précédente font clignoter leur
+// enceinte, même quand la note d'avant est encore tenue (Tutti, notes enchaînées).
+let lastFrame = performance.now();
+requestAnimationFrame(function frame() {
+  const t = performance.now();
+  // onglet revenu au premier plan après une pause : on ne rejoue pas les attaques manquées
+  if (t - lastFrame < 250) {
+    const hits = sim.onsetsBetween(lastFrame, t);
+    cells.forEach((cell, n) => {
+      if (hits.has(`1:${n}`)) flash(cell, 1);
+      if (hits.has(`0:${n}`)) flash(cell, 0);
+    });
+  }
+  lastFrame = t;
+  requestAnimationFrame(frame);
+});
 
 setInterval(() => {
   const t = performance.now();

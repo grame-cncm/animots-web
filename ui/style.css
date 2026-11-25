@@ -89,6 +89,19 @@ button.principal { background: var(--accent); color: var(--accent-texte); border
 .enceinte.a::before, .enceinte.b::after { opacity: .85; }
 .enceinte span { position: relative; z-index: 1; }
 .enceinte.a span, .enceinte.b span { color: #fff; font-weight: 600; }
+/* Attaque de note : bref éclair à la couleur du port (--flash, fixé par app.js) */
+.enceinte.attaque { animation: attaque 220ms ease-out; }
+@keyframes attaque {
+  0% { box-shadow: 0 0 0 3px var(--flash), 0 0 18px 4px var(--flash); transform: scale(1.1); }
+  100% { box-shadow: 0 0 0 0 transparent; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .enceinte.attaque { animation-name: attaque-doux; }
+}
+@keyframes attaque-doux {
+  0% { box-shadow: 0 0 0 3px var(--flash); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
 .legende { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
 .pastille { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .pastille.a { background: var(--port-a); }
