@@ -6,8 +6,8 @@
 # Usage :
 #   web-kiosk.sh [--reglage] [URL]
 #
-#   URL        page à ouvrir ; par défaut le lecteur publié sur GitHub Pages, qui démarre seul
-#              (?demarrer).
+#   URL        page à ouvrir ; par défaut la version figée v1.0 publiée sur GitHub Pages, qui
+#              démarre seule (?demarrer) et reste jouable hors ligne après une première visite.
 #   --reglage  premier réglage : fenêtre normale, sans démarrage automatique, pour accorder
 #              l'accès MIDI et choisir les sorties des ports A et B. Le profil dédié s'en
 #              souvient ensuite.
@@ -17,7 +17,7 @@
 # déjà ouverte par ailleurs n'interfère pas.
 
 set -e
-URL_DEFAUT="https://grame-cncm.github.io/animots-web/ui/?demarrer"
+URL_DEFAUT="https://grame-cncm.github.io/animots-web/v1.0/ui/?demarrer"
 PROFIL="$HOME/Library/Application Support/Animots/Chrome"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 

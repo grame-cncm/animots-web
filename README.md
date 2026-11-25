@@ -1,6 +1,11 @@
 # animots-web
 
-Lecteur en ligne : **https://grame-cncm.github.io/animots-web/** (Chrome ou Edge, pour le MIDI).
+Lecteur en ligne (Chrome ou Edge, pour le MIDI) :
+
+- **version figée v1.0**, à donner à une machine d'installation : https://grame-cncm.github.io/animots-web/v1.0/ui/
+- version de développement (branche `main`) : https://grame-cncm.github.io/animots-web/
+
+Après une première visite, les deux restent jouables hors ligne.
 
 Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2013) : le langage de composition CLCE/Prorythme et les 36 séquences de `Gerland2013-4.lsp`, avec une sortie MIDI vers Kontakt 8. L'analyse de faisabilité et le plan complet sont dans un document tenu hors de ce dépôt (`Animots-Gerland-JS-analyse-et-plan.md`).
 
@@ -139,7 +144,7 @@ Le script a été essayé dans un dossier personnel factice : plists validées p
 
 ### Variante web : la page publiée ouverte au démarrage
 
-Sur une machine connectée au Web, l'installation peut aussi tourner dans Chrome, à partir de la page publiée sur GitHub Pages. L'adresse `ui/?demarrer` lance la boucle des parties toute seule au chargement ; `&graine=N` fixe la graine.
+Sur une machine connectée au Web, l'installation peut aussi tourner dans Chrome, à partir de la page publiée sur GitHub Pages. L'adresse `ui/?demarrer` lance la boucle des parties toute seule au chargement ; `&graine=N` fixe la graine. Par défaut, le kiosque ouvre la **version figée v1.0** : `https://grame-cncm.github.io/animots-web/v1.0/ui/?demarrer`.
 
 ```bash
 deploy/web-kiosk.sh --reglage     # une fois : accepter l'accès MIDI, choisir les ports A et B, quitter Chrome
@@ -149,15 +154,18 @@ deploy/install-web.sh --desinstaller
 
 Chrome tourne avec un profil dédié (`~/Library/Application Support/Animots/Chrome`), qui garde l'autorisation MIDI et le choix des ports. `caffeinate` empêche la mise en veille. L'agent relance Chrome s'il se ferme. Une autre adresse peut être donnée, par exemple un serveur local : `deploy/install-web.sh "http://localhost:8080/ui/?demarrer"`. Ne pas installer en même temps l'exécuteur Node : les deux joueraient.
 
-**Fiabilité.** Cette variante convient à des démonstrations, ou si l'on veut voir les enceintes à l'écran. Pour une installation permanente, l'exécuteur Node reste plus sûr, pour cinq raisons :
+**Fiabilité.** Deux risques de cette variante sont maintenant couverts :
 
-- **Réseau.** Sans connexion au démarrage, la page ne se charge pas et rien ne joue. Il n'y a pas de cache hors ligne.
-- **Version.** La page suit la branche `main` : chaque `git push` change ce que joue l'installation au prochain chargement, et un commit défectueux l'arrête.
+- **Réseau : cache hors ligne.** Chaque version publiée a un service worker (`sw.js`, produit par `scripts/build-pages.js`). Dès la première visite, il met en cache les 63 fichiers dont la page a besoin, puis les sert depuis le cache. Ensuite, la page démarre même sans réseau, démarrage automatique compris. Une nouvelle publication remplace le cache d'un bloc ; une page déjà ouverte garde sa version jusqu'au prochain chargement. Vérifié dans Chrome, réseau coupé : rechargement complet et démarrage automatique depuis le cache. Le navigateur intégré à l'application Claude n'accepte pas les service workers.
+- **Version : adresse figée.** Chaque étiquette git `vX.Y` est publiée dans son dossier (`/v1.0/`), qui ne change plus. La racine suit `main`. Le workflow `.github/workflows/pages.yml` reconstruit le site à chaque push et à chaque nouvelle étiquette, **seulement si les tests passent**. Pour valider une nouvelle version : `git tag -a v1.1 -m "…" && git push origin v1.1`, puis donner la nouvelle adresse au kiosque (`deploy/install-web.sh "https://grame-cncm.github.io/animots-web/v1.1/ui/?demarrer"`).
+
+Trois risques restent, et pour une installation permanente l'exécuteur Node reste plus sûr :
+
 - **Navigateur.** Une mise à jour de Chrome peut redemander l'autorisation MIDI, afficher un dialogue ou changer le comportement des onglets en arrière-plan.
 - **Surveillance.** Une page ne peut pas écrire de fichier de battement : si elle se bloque sans que Chrome se ferme, rien ne la relance.
-- **Hébergement.** Une panne de GitHub Pages, ou un changement du dépôt, rend la page inaccessible.
+- **Hébergement.** Une panne de GitHub Pages, ou un changement du dépôt, empêche une *première* visite. Une machine qui a déjà chargé sa version continue depuis le cache, tant que le profil Chrome n'est pas effacé.
 
-Ce n'est pas vérifié : un fonctionnement de plusieurs jours en kiosque. Seuls le démarrage automatique (`?demarrer`) et l'installateur, dans un dossier personnel factice, ont été essayés.
+Ce n'est pas vérifié : un fonctionnement de plusieurs jours en kiosque. Ont été essayés : le démarrage automatique (`?demarrer`), le cache hors ligne dans Chrome, et l'installateur dans un dossier personnel factice.
 
 ## Exporter une séquence en fichier MIDI
 
@@ -224,13 +232,16 @@ ui/
 scripts/
   export-mid.js           calcule une séquence ou un essai et l'exporte en .mid
   transpile.js            régénère les séquences depuis source/ (--check : vérifie seulement)
-  serve.js                serveur local de la page (127.0.0.1, port 8080 par défaut)
+  serve.js                serveur local de la page (127.0.0.1, port 8080 par défaut ; un dossier en option)
+  build-pages.js          construit le site Pages : main à la racine, chaque étiquette vX.Y figée, service workers
   headless.js             exécuteur sans navigateur (npm run headless)
 deploy/
   install.sh              installe ou retire les agents launchd (exécuteur et chien de garde)
   watchdog.sh             relance l'exécuteur si son battement s'arrête
   install-web.sh          variante : agent launchd qui ouvre la page dans Chrome en kiosque
   web-kiosk.sh            lance Chrome (profil dédié, kiosque, caffeinate) ; --reglage pour le premier réglage
+.github/workflows/
+  pages.yml               tests, puis publication du site sur GitHub Pages (push sur main, étiquette v*)
 tests/                    tests node:test, dont un test qui impose la documentation du code
   oracle-sequences.js     séquences 2 et 3 traduites à la main, référence du transpileur
 out/                      fichiers .mid produits (peut être effacé)

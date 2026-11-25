@@ -8,16 +8,19 @@
  *
  * Usage :
  *
- *     node scripts/serve.js [port]      (8080 par défaut, ou la variable PORT)
+ *     node scripts/serve.js [port] [dossier]
+ *
+ * Port : 8080 par défaut, ou la variable PORT. Dossier : la racine du projet par défaut ; par
+ * exemple le site construit par scripts/build-pages.js, pour l'essayer avant publication.
  */
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { join, normalize, extname, sep } from 'node:path';
+import { join, normalize, extname, sep, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.argv[2] ?? process.env.PORT ?? 8080);
+const ROOT = process.argv[3] ? resolve(process.argv[3]) : fileURLToPath(new URL('..', import.meta.url));
 
 /** Types MIME des fichiers servis. */
 const TYPES = {

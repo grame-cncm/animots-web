@@ -4,7 +4,8 @@
 # être connectée au Web si l'adresse est celle de GitHub Pages.
 #
 # Usage :
-#   deploy/install-web.sh [URL]       installe et démarre (URL par défaut : GitHub Pages, ?demarrer)
+#   deploy/install-web.sh [URL]       installe et démarre (URL par défaut : version figée v1.0 sur
+#                                     GitHub Pages, ?demarrer)
 #   deploy/install-web.sh --desinstaller
 #
 # Avant la première installation, faire une fois le réglage :
@@ -32,7 +33,7 @@ if [ -f "$AGENTS/com.grame.animots.plist" ]; then
   exit 1
 fi
 
-URL="${1:-https://grame-cncm.github.io/animots-web/ui/?demarrer}"
+URL="${1:-https://grame-cncm.github.io/animots-web/v1.0/ui/?demarrer}"
 mkdir -p "$AGENTS" "$LOGS"
 cat > "$AGENTS/$LABEL.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

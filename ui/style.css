@@ -59,6 +59,7 @@ main {
 .large { grid-column: 1 / -1; }
 .note { color: var(--doux); font-size: 13px; margin: 8px 0 0; }
 .etat { margin: 0; font-weight: 600; }
+.version { margin: 0; width: 100%; }
 .etat[data-etat="boucle"], .etat[data-etat="unique"] { color: var(--accent); }
 .ports { display: grid; gap: 8px; margin-top: 8px; }
 .ports label, .graine { display: grid; grid-template-columns: 60px 1fr; align-items: center; gap: 8px; }

@@ -172,6 +172,40 @@ function startInstallation() {
 
 $('demarrer').addEventListener('click', startInstallation);
 
+// ________________________________________________________ version et cache hors ligne
+
+/**
+ * Version jouée, déduite de l'adresse : `…/v1.0/ui/` pour une version figée (étiquette git),
+ * sinon la version de développement (branche main) ou une copie locale.
+ * @returns {string}
+ */
+function versionName() {
+  const m = /\/(v[\w.-]+)\/ui\//.exec(location.pathname);
+  if (m) return `version ${m[1]} (figée)`;
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  return local ? 'copie locale' : 'version de développement (main)';
+}
+$('version').textContent = versionName();
+
+// Le service worker (sw.js, produit par scripts/build-pages.js) met toute la version en cache :
+// après une première visite, la page démarre même sans réseau. Il n'existe que sur le site
+// publié ; en local, on ne l'enregistre que sur demande (?cache), pour ne pas gêner le développement.
+const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+if ('serviceWorker' in navigator && (!isLocal || new URLSearchParams(location.search).has('cache'))) {
+  navigator.serviceWorker.register('../sw.js', { scope: '../' })
+    .then(() => navigator.serviceWorker.ready)
+    .then((reg) => {
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data?.type === 'version') {
+          journal(`page disponible hors ligne (${e.data.files} fichiers en cache, empreinte ${e.data.hash})`);
+          $('version').textContent = `${versionName()}, disponible hors ligne`;
+        }
+      });
+      reg.active?.postMessage('version');
+    })
+    .catch((e) => journal(`cache hors ligne indisponible : ${e.message}`, true));
+}
+
 // Démarrage automatique, pour une machine d'installation qui ouvre la page au démarrage :
 // ui/?demarrer (et ?demarrer&graine=N pour une graine fixe). La boucle part dès que l'accès
 // MIDI est établi et les sorties mémorisées rétablies, ou refusé (lecture simulée).
