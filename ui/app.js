@@ -10,6 +10,8 @@
  * - Les 16 enceintes s'allument quand leur canal joue, quelle que soit la sortie.
  * - Le journal note chaque partie avec l'état de l'aléa au moment de son calcul, ce qui permet
  *   de la retrouver (`setRandomState`), comme le fichier `animots-session` de 2013.
+ * - `ui/?demarrer` lance la boucle tout seul au chargement (`&graine=N` pour une graine fixe) :
+ *   c'est ce qu'utilise le démarrage en kiosque de deploy/install-web.sh.
  */
 
 import { seed, getRandomState, sharedGenerators, Score } from '../core/index.js';
@@ -116,7 +118,8 @@ for (const [port, id] of [[0, 'port-a'], [1, 'port-b']]) {
   });
 }
 
-openWebMidi()
+/** Accès MIDI établi (ou refusé) : le démarrage automatique attend ce moment. */
+const midiReady = openWebMidi()
   .then((m) => {
     midi = m;
     fillOutputs();
@@ -146,7 +149,12 @@ const player = new Player({
 });
 const ticker = startTicker(() => player.tick(), 25);
 
-$('demarrer').addEventListener('click', () => {
+/**
+ * Démarre la boucle des parties, avec la graine saisie ou une graine aléatoire (bouton Démarrer,
+ * ou démarrage automatique).
+ * @returns {void}
+ */
+function startInstallation() {
   const text = /** @type {HTMLInputElement} */ ($('graine')).value.trim();
   const graine = text ? Number(text) >>> 0 : crypto.getRandomValues(new Uint32Array(1))[0];
   seed(graine);
@@ -160,7 +168,21 @@ $('demarrer').addEventListener('click', () => {
     score.meta = { no: ++partNo, state };
     return score;
   });
-});
+}
+
+$('demarrer').addEventListener('click', startInstallation);
+
+// Démarrage automatique, pour une machine d'installation qui ouvre la page au démarrage :
+// ui/?demarrer (et ?demarrer&graine=N pour une graine fixe). La boucle part dès que l'accès
+// MIDI est établi et les sorties mémorisées rétablies, ou refusé (lecture simulée).
+const params = new URLSearchParams(location.search);
+if (params.has('demarrer')) {
+  if (params.get('graine')) /** @type {HTMLInputElement} */ ($('graine')).value = params.get('graine') ?? '';
+  midiReady.then(() => {
+    journal('démarrage automatique (?demarrer)');
+    startInstallation();
+  });
+}
 
 $('arreter').addEventListener('click', () => {
   player.stop();

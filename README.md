@@ -137,6 +137,28 @@ Journal, battement et sorties sont dans `~/Library/Logs/Animots/`. Les plists co
 
 Le script a été essayé dans un dossier personnel factice : plists validées par `plutil -lint`, et le chien de garde vérifié sur un battement ancien et sur un battement récent. **Il n'a pas été installé sur la machine.** Reste à faire : le test d'endurance de 72 heures avec Kontakt 8.
 
+### Variante web : la page publiée ouverte au démarrage
+
+Sur une machine connectée au Web, l'installation peut aussi tourner dans Chrome, à partir de la page publiée sur GitHub Pages. L'adresse `ui/?demarrer` lance la boucle des parties toute seule au chargement ; `&graine=N` fixe la graine.
+
+```bash
+deploy/web-kiosk.sh --reglage     # une fois : accepter l'accès MIDI, choisir les ports A et B, quitter Chrome
+deploy/install-web.sh             # agent launchd : Chrome en kiosque sur la page, à chaque ouverture de session
+deploy/install-web.sh --desinstaller
+```
+
+Chrome tourne avec un profil dédié (`~/Library/Application Support/Animots/Chrome`), qui garde l'autorisation MIDI et le choix des ports. `caffeinate` empêche la mise en veille. L'agent relance Chrome s'il se ferme. Une autre adresse peut être donnée, par exemple un serveur local : `deploy/install-web.sh "http://localhost:8080/ui/?demarrer"`. Ne pas installer en même temps l'exécuteur Node : les deux joueraient.
+
+**Fiabilité.** Cette variante convient à des démonstrations, ou si l'on veut voir les enceintes à l'écran. Pour une installation permanente, l'exécuteur Node reste plus sûr, pour cinq raisons :
+
+- **Réseau.** Sans connexion au démarrage, la page ne se charge pas et rien ne joue. Il n'y a pas de cache hors ligne.
+- **Version.** La page suit la branche `main` : chaque `git push` change ce que joue l'installation au prochain chargement, et un commit défectueux l'arrête.
+- **Navigateur.** Une mise à jour de Chrome peut redemander l'autorisation MIDI, afficher un dialogue ou changer le comportement des onglets en arrière-plan.
+- **Surveillance.** Une page ne peut pas écrire de fichier de battement : si elle se bloque sans que Chrome se ferme, rien ne la relance.
+- **Hébergement.** Une panne de GitHub Pages, ou un changement du dépôt, rend la page inaccessible.
+
+Ce n'est pas vérifié : un fonctionnement de plusieurs jours en kiosque. Seuls le démarrage automatique (`?demarrer`) et l'installateur, dans un dossier personnel factice, ont été essayés.
+
 ## Exporter une séquence en fichier MIDI
 
 ```bash
@@ -207,6 +229,8 @@ scripts/
 deploy/
   install.sh              installe ou retire les agents launchd (exécuteur et chien de garde)
   watchdog.sh             relance l'exécuteur si son battement s'arrête
+  install-web.sh          variante : agent launchd qui ouvre la page dans Chrome en kiosque
+  web-kiosk.sh            lance Chrome (profil dédié, kiosque, caffeinate) ; --reglage pour le premier réglage
 tests/                    tests node:test, dont un test qui impose la documentation du code
   oracle-sequences.js     séquences 2 et 3 traduites à la main, référence du transpileur
 out/                      fichiers .mid produits (peut être effacé)
