@@ -175,3 +175,26 @@ export const transfDat = (l, v) => {
  */
 export const once = (g) => G(L(1, g)[0]);
 
+/**
+ * `(place-prog date prog *out*)` : envoie le CC9 qui choisit le groupe Kontakt, sur les 16
+ * canaux du port A (premier élément de prog), puis sur les 16 canaux du port B (second).
+ * @param {import('../../core/score.js').Score} score
+ * @param {number} date Date en ticks (toujours 0 dans Gerland).
+ * @param {Array<number>} prog Couple de groupes, par exemple `MULTIS.m2` = [1, 3].
+ * @returns {void}
+ */
+export function placeProg(score, date, prog) {
+  for (let chan = 0; chan < 16; chan++) score.cc(date, 0, chan, 9, prog[0]);
+  for (let chan = 0; chan < 16; chan++) score.cc(date, 1, chan, 9, prog[1]);
+}
+
+/**
+ * `(print-dialog seq)` : affiche le nom de la séquence en cours. Ici, le nom est rangé dans la
+ * partition, et l'interface le lira.
+ * @param {import('../../core/score.js').Score} score
+ * @param {string} name
+ * @returns {void}
+ */
+export function printDialog(score, name) {
+  score.label = name;
+}

@@ -2,8 +2,8 @@
  * @file Couverture de l'annexe A du document d'analyse : chaque opérateur appelé par
  * Gerland2013-4.lsp a son équivalent JavaScript exporté.
  *
- * Les fonctions de processus (prorythme, gnotes, n-prorythme, n-gnotes, place-prog) relèvent
- * de la phase 2 et ne sont pas encore vérifiées ici.
+ * Les processus (phase 2) y figurent aussi : prorythme, gnotes, n-prorythme, n-gnotes,
+ * place-prog, place-tempo, print-dialog.
  */
 
 import { test } from 'node:test';
@@ -26,6 +26,9 @@ const ANNEXE_A = {
   'groupe': [tools, 'groupe'], 'share-gen': [core, 'shareGen'], 'use-gen': [core, 'useGen'],
   'free-gen': [core, 'freeGen'], '2/3c (…)': [core, 't'], 'trajectoires': [config, 'trajectoires'],
   'listgroupe': [config, 'listgroupe'], '(g (car (l 1 deb)))': [tools, 'once'],
+  'prorythme': [core, 'prorythme'], 'gnotes': [core, 'gnotes'], 'n-prorythme': [core, 'nProrythme'],
+  'n-gnotes': [core, 'nGnotes'], 'place-prog': [tools, 'placeProg'], 'place-tempo': [core, 'placeTempo'],
+  'print-dialog': [tools, 'printDialog'], 'init / *out*': [core, 'Score'],
 };
 
 test('chaque opérateur de l’annexe A a son équivalent JavaScript', () => {

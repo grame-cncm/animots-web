@@ -27,7 +27,7 @@ function jsFiles(dir) {
   });
 }
 
-const FILES = ['core', 'piece', 'tests'].flatMap((d) => jsFiles(join(ROOT, d)));
+const FILES = ['core', 'piece', 'output', 'scripts', 'tests'].flatMap((d) => jsFiles(join(ROOT, d)));
 
 test('chaque fichier commence par un bloc @file (après un éventuel #!)', () => {
   for (const f of FILES) {
