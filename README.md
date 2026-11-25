@@ -1,6 +1,8 @@
 # animots-web
 
-Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2013) : le langage de composition CLCE/Prorythme et les 36 séquences de `Gerland2013-4.lsp`, avec une sortie MIDI vers Kontakt 8. L'analyse et le plan complet sont dans [`../Animots-Gerland-JS-analyse-et-plan.md`](../Animots-Gerland-JS-analyse-et-plan.md).
+Lecteur en ligne : **https://grame-cncm.github.io/animots-web/** (Chrome ou Edge, pour le MIDI).
+
+Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2013) : le langage de composition CLCE/Prorythme et les 36 séquences de `Gerland2013-4.lsp`, avec une sortie MIDI vers Kontakt 8. L'analyse de faisabilité et le plan complet sont dans un document tenu hors de ce dépôt (`Animots-Gerland-JS-analyse-et-plan.md`).
 
 ## État
 
@@ -73,13 +75,13 @@ Les versions plus récentes (2015, 2017), d'où le portage était parti, n'en di
 
 1. **Bus MIDI.** Dans Configuration audio et MIDI (fenêtre Studio MIDI), ouvrir le pilote IAC, cocher « Le gestionnaire est en ligne », et créer deux ports : `Animots A` et `Animots B`.
 2. **Kontakt 8 en mode autonome** (pas en greffon, qui ne reçoit que 16 canaux) : charger le multi. Dans Options, onglet MIDI, rubrique Inputs, mettre `Animots A` sur le port A et `Animots B` sur le port B.
-3. **Lecteur** :
+3. **Lecteur** : ouvrir **https://grame-cncm.github.io/animots-web/** (GitHub Pages) dans **Chrome ou Edge**. On peut aussi le servir en local :
 
    ```bash
    npm run serve
    ```
 
-   Ouvrir `http://localhost:8080/ui/` dans **Chrome ou Edge**, accepter l'accès MIDI, puis choisir `Animots A` pour le port A et `Animots B` pour le port B. Le choix est mémorisé.
+   puis ouvrir `http://localhost:8080/ui/`. Dans les deux cas, accepter l'accès MIDI, puis choisir `Animots A` pour le port A et `Animots B` pour le port B. Le choix est mémorisé.
 4. **Démarrer** lance la boucle des parties, avec une graine aléatoire ou celle saisie. **Cercle1**, **Cercle2**, **Tutti** et **Alterne** jouent les essais de réglage. **Arrêter** coupe tout.
 
 Sans sortie choisie, la lecture est simulée : rien ne sonne, mais les 16 enceintes s'allument à l'écran quand leur canal joue. Le journal note chaque partie avec l'état de l'aléa au moment de son calcul. **Exporter la partie en cours** télécharge le `.mid` de ce qui joue.
