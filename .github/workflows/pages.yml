@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Tests (sans SBCL ni module MIDI : ces parties sont sautées)
+      - name: "Tests (sans SBCL ni module MIDI : ces parties sont sautées)"
         run: npm test
       - name: Construction du site
         run: node scripts/build-pages.js site
