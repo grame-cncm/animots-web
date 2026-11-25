@@ -2,7 +2,8 @@
 
 Lecteur en ligne (Chrome ou Edge, pour le MIDI) :
 
-- **version figée v1.0**, à donner à une machine d'installation : https://grame-cncm.github.io/animots-web/v1.0/ui/
+- **version figée v1.1**, à donner à une machine d'installation : https://grame-cncm.github.io/animots-web/v1.1/ui/
+- version figée v1.0 (sans le diagnostic du superviseur) : https://grame-cncm.github.io/animots-web/v1.0/ui/
 - version de développement (branche `main`) : https://grame-cncm.github.io/animots-web/
 
 Après une première visite, les deux restent jouables hors ligne.
@@ -144,7 +145,7 @@ Le script a été essayé dans un dossier personnel factice : plists validées p
 
 ### Variante web : la page publiée ouverte au démarrage
 
-Sur une machine connectée au Web, l'installation peut aussi tourner dans Chrome, à partir de la page publiée sur GitHub Pages. L'adresse `ui/?demarrer` lance la boucle des parties toute seule au chargement ; `&graine=N` fixe la graine. Par défaut, le kiosque ouvre la **version figée v1.0** : `https://grame-cncm.github.io/animots-web/v1.0/ui/?demarrer`.
+Sur une machine connectée au Web, l'installation peut aussi tourner dans Chrome, à partir de la page publiée sur GitHub Pages. L'adresse `ui/?demarrer` lance la boucle des parties toute seule au chargement ; `&graine=N` fixe la graine. Par défaut, le kiosque ouvre la **version figée v1.1** : `https://grame-cncm.github.io/animots-web/v1.1/ui/?demarrer`.
 
 ```bash
 deploy/web-kiosk.sh --reglage     # une fois : accepter l'accès MIDI, choisir les ports A et B, quitter Chrome
@@ -157,7 +158,7 @@ Chrome tourne avec un profil dédié (`~/Library/Application Support/Animots/Chr
 **Fiabilité.** Deux risques de cette variante sont maintenant couverts :
 
 - **Réseau : cache hors ligne.** Chaque version publiée a un service worker (`sw.js`, produit par `scripts/build-pages.js`). Dès la première visite, il met en cache les 63 fichiers dont la page a besoin, puis les sert depuis le cache. Ensuite, la page démarre même sans réseau, démarrage automatique compris. Une nouvelle publication remplace le cache d'un bloc ; une page déjà ouverte garde sa version jusqu'au prochain chargement. Vérifié dans Chrome, réseau coupé : rechargement complet et démarrage automatique depuis le cache. Le navigateur intégré à l'application Claude n'accepte pas les service workers.
-- **Version : adresse figée.** Chaque étiquette git `vX.Y` est publiée dans son dossier (`/v1.0/`), qui ne change plus. La racine suit `main`. Le workflow `.github/workflows/pages.yml` reconstruit le site à chaque push et à chaque nouvelle étiquette, **seulement si les tests passent**. Pour valider une nouvelle version : `git tag -a v1.1 -m "…" && git push origin v1.1`, puis donner la nouvelle adresse au kiosque (`deploy/install-web.sh "https://grame-cncm.github.io/animots-web/v1.1/ui/?demarrer"`).
+- **Version : adresse figée.** Chaque étiquette git `vX.Y` est publiée dans son dossier (`/v1.1/`), qui ne change plus. La racine suit `main`. Le workflow `.github/workflows/pages.yml` reconstruit le site à chaque push et à chaque nouvelle étiquette, **seulement si les tests passent**. Pour valider une nouvelle version : `git tag -a v1.2 -m "…" && git push origin v1.2`, puis donner la nouvelle adresse au kiosque (`deploy/install-web.sh "https://grame-cncm.github.io/animots-web/v1.2/ui/?demarrer"`) ou au superviseur (`--url`).
 
 Trois risques restent, et pour une installation permanente l'exécuteur Node reste plus sûr :
 
@@ -166,6 +167,34 @@ Trois risques restent, et pour une installation permanente l'exécuteur Node res
 - **Hébergement.** Une panne de GitHub Pages, ou un changement du dépôt, empêche une *première* visite. Une machine qui a déjà chargé sa version continue depuis le cache, tant que le profil Chrome n'est pas effacé.
 
 Ce n'est pas vérifié : un fonctionnement de plusieurs jours en kiosque. Ont été essayés : le démarrage automatique (`?demarrer`), le cache hors ligne dans Chrome, et l'installateur dans un dossier personnel factice.
+
+### Mode recommandé sur une machine connectée : le superviseur (web, puis headless en secours)
+
+Le superviseur (`scripts/superviseur.js`) essaie la version web et bascule sur l'exécuteur headless si la page ne joue pas.
+
+1. Il lance Chrome en kiosque sur la version figée, avec le profil dédié et un port de débogage local (127.0.0.1).
+2. Toutes les 10 secondes, il lit le diagnostic de la page (`window.animotsDiagnostic`) par le protocole DevTools. La page n'envoie rien elle-même : il n'y a pas de requête d'un site public vers le réseau local, que Chrome restreint.
+3. La page **joue** si la boucle des parties tourne, si les ports A et B sont reliés à de vraies sorties MIDI et si l'ordonnanceur bat encore.
+4. Sinon, au bout d'une minute au démarrage, après trois contrôles en échec ensuite, ou dès que Chrome s'arrête, le superviseur **ferme Chrome**, attend qu'il soit fermé, puis lance l'**exécuteur headless**. Les deux ne jouent jamais ensemble. Il n'y a pas de retour au web pendant la session : le web sera retenté à l'ouverture de session suivante.
+
+```bash
+deploy/web-kiosk.sh --reglage        # une fois : accès MIDI, ports A et B sur les bus IAC
+deploy/install-auto.sh --sortie-a "IAC Bus 1" --sortie-b "IAC Bus 2"
+deploy/install-auto.sh --desinstaller
+```
+
+Les sorties données à `install-auto.sh` servent à l'exécuteur de secours. Ce doivent être les mêmes que celles choisies dans la page, pour que Kontakt reçoive au même endroit dans les deux modes. Le journal (`~/Library/Logs/Animots/session.log`) note chaque décision, par exemple `bascule sur l'exécuteur headless : au bout de 60 s, la page ne joue pas : Web MIDI refusé ou indisponible : lecture simulée, muette`. Le chien de garde relance le superviseur si celui-ci se bloque.
+
+Ce qui est couvert : pas de réseau à la toute première visite, page plantée ou bloquée, autorisation MIDI perdue après une mise à jour de Chrome (lecture simulée, donc muette), Chrome absent ou qui s'arrête.
+
+Essais réalisés, avec le vrai Chrome sans fenêtre et un profil temporaire :
+
+- page sans MIDI : bascule au bout du délai, avec la bonne raison ;
+- page acceptée (`--accepter-simule`) : le superviseur reste sur le web ;
+- Chrome tué en cours de route : bascule au contrôle suivant ;
+- Chrome absent : bascule immédiate.
+
+Les deux premiers essais et le dernier sont dans `tests/superviseur.test.js`. L'installateur a été essayé dans un dossier personnel factice. **Rien n'est installé sur la machine**, et un fonctionnement de plusieurs jours n'a pas été essayé.
 
 ## Exporter une séquence en fichier MIDI
 
@@ -235,11 +264,13 @@ scripts/
   serve.js                serveur local de la page (127.0.0.1, port 8080 par défaut ; un dossier en option)
   build-pages.js          construit le site Pages : main à la racine, chaque étiquette vX.Y figée, service workers
   headless.js             exécuteur sans navigateur (npm run headless)
+  superviseur.js          essaie la page web dans Chrome, bascule sur l'exécuteur si elle ne joue pas
 deploy/
   install.sh              installe ou retire les agents launchd (exécuteur et chien de garde)
   watchdog.sh             relance l'exécuteur si son battement s'arrête
   install-web.sh          variante : agent launchd qui ouvre la page dans Chrome en kiosque
   web-kiosk.sh            lance Chrome (profil dédié, kiosque, caffeinate) ; --reglage pour le premier réglage
+  install-auto.sh         mode recommandé : agent launchd du superviseur (web, puis headless en secours)
 .github/workflows/
   pages.yml               tests, puis publication du site sur GitHub Pages (push sur main, étiquette v*)
 tests/                    tests node:test, dont un test qui impose la documentation du code

@@ -7,11 +7,12 @@
 # relance (launchctl kickstart -k). C'est l'équivalent de restart-animots en 2013, qui relançait
 # l'application si le fichier animots-session n'avait pas bougé depuis 30 minutes.
 #
-# Usage : watchdog.sh <fichier de battement> [limite en secondes, 120 par défaut]
+# Usage : watchdog.sh <fichier de battement> [limite en secondes, 120 par défaut] [agent à relancer]
+#   agent : com.grame.animots par défaut (exécuteur), com.grame.animots-auto pour le superviseur.
 
 BATTEMENT="$1"
 LIMITE="${2:-120}"
-LABEL="com.grame.animots"
+LABEL="${3:-com.grame.animots}"
 
 [ -n "$BATTEMENT" ] || { echo "usage : $0 <fichier de battement> [limite]"; exit 2; }
 # Pas de fichier : l'exécuteur démarre, ou n'est pas installé ; launchd s'occupe du premier cas.

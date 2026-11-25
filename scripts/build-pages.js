@@ -46,6 +46,7 @@ function filesUnder(dir) {
   const out = [];
   const walk = (d) => {
     for (const name of readdirSync(d)) {
+      if (name === '.DS_Store') continue;
       const p = join(d, name);
       if (statSync(p).isDirectory()) walk(p);
       else out.push(relative(dir, p).split(sep).join('/'));
@@ -147,7 +148,7 @@ function extractTag(tag, dest) {
 export function buildPages(out) {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  for (const p of APP_PATHS) cpSync(join(ROOT, p), join(out, p), { recursive: true });
+  for (const p of APP_PATHS) cpSync(join(ROOT, p), join(out, p), { recursive: true, filter: (src) => !src.endsWith('.DS_Store') });
   const versions = [{ name: 'main', ...addServiceWorker(out) }];
   for (const tag of versionTags()) {
     const dest = join(out, tag);

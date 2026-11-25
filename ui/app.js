@@ -147,7 +147,24 @@ const player = new Player({
     $('etat').textContent = { arrêt: 'À l’arrêt', boucle: 'Installation en cours', unique: 'Essai en cours' }[state];
   },
 });
-const ticker = startTicker(() => player.tick(), 25);
+/** Heure du dernier battement de l'ordonnanceur : un battement qui s'arrête trahit un Worker mort. */
+let lastBeat = performance.now();
+const ticker = startTicker(() => { lastBeat = performance.now(); player.tick(); }, 25);
+
+/**
+ * Diagnostic lu par le superviseur (scripts/superviseur.js), par le protocole DevTools de Chrome,
+ * pour décider si la page joue vraiment ou s'il faut basculer sur l'exécuteur headless.
+ * @returns {{etat: string, envoyes: number, sortiesMidi: Array<number>, webMidi: boolean, battementMs: number, sequence: string|null, version: string}}
+ */
+window.animotsDiagnostic = () => ({
+  etat: player.state,
+  envoyes: player.sent,
+  sortiesMidi: midi ? midi.ports() : [],
+  webMidi: midi !== null,
+  battementMs: Math.round(performance.now() - lastBeat),
+  sequence: player.current()?.score.label ?? null,
+  version: $('version').textContent ?? '',
+});
 
 /**
  * Démarre la boucle des parties, avec la graine saisie ou une graine aléatoire (bouton Démarrer,
