@@ -25,11 +25,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publier:
+  # Deux jobs, comme le modèle de GitHub : dans un seul job, deploy-pages cherche parfois
+  # l'artefact quelques millisecondes après son envoi, avant qu'il soit enregistré, et échoue
+  # (« No artifacts named "github-pages" », actions/deploy-pages#451). Le 25 novembre 2026,
+  # quatre publications de suite ont échoué ainsi, relance comprise.
+  construire:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploiement.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,5 +46,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
       - id: deploiement
         uses: actions/deploy-pages@v4
