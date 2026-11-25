@@ -177,13 +177,40 @@ Le superviseur (`scripts/superviseur.js`) essaie la version web et bascule sur l
 3. La page **joue** si la boucle des parties tourne, si les ports A et B sont reliés à de vraies sorties MIDI et si l'ordonnanceur bat encore.
 4. Sinon, au bout d'une minute au démarrage, après trois contrôles en échec ensuite, ou dès que Chrome s'arrête, le superviseur **ferme Chrome**, attend qu'il soit fermé, puis lance l'**exécuteur headless**. Les deux ne jouent jamais ensemble. Il n'y a pas de retour au web pendant la session : le web sera retenté à l'ouverture de session suivante.
 
-```bash
-deploy/web-kiosk.sh --reglage        # une fois : accès MIDI, ports A et B sur les bus IAC
-deploy/install-auto.sh --sortie-a "IAC Bus 1" --sortie-b "IAC Bus 2"
-deploy/install-auto.sh --desinstaller
-```
+#### Installer le superviseur avec les bus IAC
 
-Les sorties données à `install-auto.sh` servent à l'exécuteur de secours. Ce doivent être les mêmes que celles choisies dans la page, pour que Kontakt reçoive au même endroit dans les deux modes. Le journal (`~/Library/Logs/Animots/session.log`) note chaque décision, par exemple `bascule sur l'exécuteur headless : au bout de 60 s, la page ne joue pas : Web MIDI refusé ou indisponible : lecture simulée, muette`. Le chien de garde relance le superviseur si celui-ci se bloque.
+**Pourquoi des bus IAC.** Kontakt écoute des entrées MIDI précises, et les deux modes doivent envoyer au même endroit. La page web (Chrome) ne peut envoyer que vers des sorties qui existent déjà sur la machine. L'exécuteur headless, lui, crée par défaut des ports virtuels (« Animots A », « Animots B ») qui n'existent que tant qu'il tourne. Si chaque mode avait ses sorties, Kontakt n'en écouterait qu'une partie, et une bascule rendrait l'installation muette. Les bus IAC sont des sorties MIDI permanentes de macOS, utilisables par les deux modes : Kontakt les écoute une fois pour toutes.
+
+Les étapes, à faire une seule fois :
+
+1. **Bus IAC.** Dans Configuration audio et MIDI (menu Fenêtre › Afficher le studio MIDI), double-cliquer sur le gestionnaire IAC. Le pilote doit être en ligne, avec deux bus. Sur un macOS en français, ils s'appellent « Gestionnaire IAC Bus 1 » et « Bus 2 ». On peut les renommer « Animots A » et « Animots B » ; il faut alors donner ces noms aux étapes suivantes.
+2. **Kontakt 8**, en mode autonome, avec le multi chargé. Dans Options › MIDI › Inputs, mettre le bus 1 sur le **port A** et le bus 2 sur le **port B**.
+3. **Réglage de la page**, dans le profil Chrome dédié :
+
+   ```bash
+   deploy/web-kiosk.sh --reglage
+   ```
+
+   Chrome s'ouvre dans une fenêtre normale. Accepter l'accès MIDI, choisir le bus 1 pour le port A et le bus 2 pour le port B, puis quitter Chrome. Le profil garde l'autorisation et les choix.
+4. **Installation du superviseur**, avec les mêmes bus :
+
+   ```bash
+   deploy/install-auto.sh --sortie-a "IAC Bus 1" --sortie-b "IAC Bus 2"
+   ```
+
+   `--sortie-a` et `--sortie-b` indiquent à l'exécuteur de secours où envoyer en cas de bascule. Une partie du nom suffit : « IAC Bus 1 » trouve « Gestionnaire IAC Bus 1 ».
+
+**Ce que fait l'installation.** Le script écrit deux agents dans `~/Library/LaunchAgents/` et les démarre aussitôt :
+
+- `com.grame.animots-auto` : le superviseur, lancé à chaque ouverture de session et relancé s'il s'arrête ;
+- `com.grame.animots-watchdog` : le chien de garde, qui vérifie chaque minute que le superviseur est vivant et le relance sinon.
+
+Le journal (`~/Library/Logs/Animots/session.log`) note chaque décision, par exemple `la page joue (version v1.1…)`, ou `bascule sur l'exécuteur headless : au bout de 60 s, la page ne joue pas : Web MIDI refusé ou indisponible : lecture simulée, muette`. Pour tout retirer : `deploy/install-auto.sh --desinstaller`.
+
+**Ce que l'installation ne fait pas :**
+
+- **Elle ne lance pas Kontakt.** Il faut ajouter Kontakt 8 aux éléments ouverts à la connexion (Réglages Système › Général) et vérifier qu'il **recharge bien le multi** au démarrage, ce qui n'a pas encore été vérifié. Si Kontakt est un peu en retard, la première partie (25 s de silence) laisse le temps, et chaque partie renvoie ses CC9 au début.
+- **Elle n'ouvre pas la session.** Les agents démarrent à l'ouverture de la session de l'utilisateur. Pour qu'une machine reparte seule après une coupure de courant, il faut activer l'ouverture de session automatique (Réglages Système › Utilisateurs et groupes) et le redémarrage après une panne de courant (réglages d'énergie).
 
 Ce qui est couvert : pas de réseau à la toute première visite, page plantée ou bloquée, autorisation MIDI perdue après une mise à jour de Chrome (lecture simulée, donc muette), Chrome absent ou qui s'arrête.
 
