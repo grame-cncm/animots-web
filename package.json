@@ -1,0 +1,13 @@
+{
+  "name": "animots-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Animots (Parc de Gerland, 2013) : portage JavaScript de CLCE/Prorythme et de Gerland2013-4.lsp, sortie MIDI vers Kontakt 8",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  }
+}
