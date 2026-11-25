@@ -2,7 +2,8 @@
 
 Lecteur en ligne (Chrome ou Edge, pour le MIDI) :
 
-- **version figée v1.1**, à donner à une machine d'installation : https://grame-cncm.github.io/animots-web/v1.1/ui/
+- **version figée v1.2**, à donner à une machine d'installation : https://grame-cncm.github.io/animots-web/v1.2/ui/
+- version figée v1.1 (anciens boutons Démarrer / Arrêter) : https://grame-cncm.github.io/animots-web/v1.1/ui/
 - version figée v1.0 (sans le diagnostic du superviseur) : https://grame-cncm.github.io/animots-web/v1.0/ui/
 - version de développement (branche `main`) : https://grame-cncm.github.io/animots-web/
 
@@ -145,7 +146,7 @@ Le script a été essayé dans un dossier personnel factice : plists validées p
 
 ### Variante web : la page publiée ouverte au démarrage
 
-Sur une machine connectée au Web, l'installation peut aussi tourner dans Chrome, à partir de la page publiée sur GitHub Pages. L'adresse `ui/?demarrer` lance la boucle des parties toute seule au chargement ; `&graine=N` fixe la graine. Par défaut, le kiosque ouvre la **version figée v1.1** : `https://grame-cncm.github.io/animots-web/v1.1/ui/?demarrer`.
+Sur une machine connectée au Web, l'installation peut aussi tourner dans Chrome, à partir de la page publiée sur GitHub Pages. L'adresse `ui/?demarrer` lance la boucle des parties toute seule au chargement ; `&graine=N` fixe la graine. Par défaut, le kiosque ouvre la **version figée v1.2** : `https://grame-cncm.github.io/animots-web/v1.2/ui/?demarrer`.
 
 ```bash
 deploy/web-kiosk.sh --reglage     # une fois : accepter l'accès MIDI, choisir les ports A et B, quitter Chrome
@@ -158,7 +159,7 @@ Chrome tourne avec un profil dédié (`~/Library/Application Support/Animots/Chr
 **Fiabilité.** Deux risques de cette variante sont maintenant couverts :
 
 - **Réseau : cache hors ligne.** Chaque version publiée a un service worker (`sw.js`, produit par `scripts/build-pages.js`). Dès la première visite, il met en cache les 63 fichiers dont la page a besoin, puis les sert depuis le cache. Ensuite, la page démarre même sans réseau, démarrage automatique compris. Une nouvelle publication remplace le cache d'un bloc ; une page déjà ouverte garde sa version jusqu'au prochain chargement. Vérifié dans Chrome, réseau coupé : rechargement complet et démarrage automatique depuis le cache. Le navigateur intégré à l'application Claude n'accepte pas les service workers.
-- **Version : adresse figée.** Chaque étiquette git `vX.Y` est publiée dans son dossier (`/v1.1/`), qui ne change plus. La racine suit `main`. Le workflow `.github/workflows/pages.yml` reconstruit le site à chaque push et à chaque nouvelle étiquette, **seulement si les tests passent**. Pour qu'une étiquette puisse publier, l'environnement `github-pages` du dépôt autorise les étiquettes `v*` en plus de `main` (Settings › Environments ; réglé le 25 novembre 2026). Pour valider une nouvelle version : `git tag -a v1.2 -m "…" && git push origin v1.2`, puis donner la nouvelle adresse au kiosque (`deploy/install-web.sh "https://grame-cncm.github.io/animots-web/v1.2/ui/?demarrer"`) ou au superviseur (`--url`).
+- **Version : adresse figée.** Chaque étiquette git `vX.Y` est publiée dans son dossier (`/v1.2/`), qui ne change plus. La racine suit `main`. Le workflow `.github/workflows/pages.yml` reconstruit le site à chaque push et à chaque nouvelle étiquette, **seulement si les tests passent**. Pour qu'une étiquette puisse publier, l'environnement `github-pages` du dépôt autorise les étiquettes `v*` en plus de `main` (Settings › Environments ; réglé le 25 novembre 2026). Pour valider une nouvelle version : `git tag -a v1.3 -m "…" && git push origin v1.3`, puis donner la nouvelle adresse au kiosque (`deploy/install-web.sh "https://grame-cncm.github.io/animots-web/v1.3/ui/?demarrer"`) ou au superviseur (`--url`).
 
 Trois risques restent, et pour une installation permanente l'exécuteur Node reste plus sûr :
 
@@ -205,7 +206,7 @@ Les étapes, à faire une seule fois :
 - `com.grame.animots-auto` : le superviseur, lancé à chaque ouverture de session et relancé s'il s'arrête ;
 - `com.grame.animots-watchdog` : le chien de garde, qui vérifie chaque minute que le superviseur est vivant et le relance sinon.
 
-Le journal (`~/Library/Logs/Animots/session.log`) note chaque décision, par exemple `la page joue (version v1.1…)`, ou `bascule sur l'exécuteur headless : au bout de 60 s, la page ne joue pas : Web MIDI refusé ou indisponible : lecture simulée, muette`. Pour tout retirer : `deploy/install-auto.sh --desinstaller`.
+Le journal (`~/Library/Logs/Animots/session.log`) note chaque décision, par exemple `la page joue (version v1.2…)`, ou `bascule sur l'exécuteur headless : au bout de 60 s, la page ne joue pas : Web MIDI refusé ou indisponible : lecture simulée, muette`. Pour tout retirer : `deploy/install-auto.sh --desinstaller`.
 
 **Ce que l'installation ne fait pas :**
 
