@@ -10,12 +10,12 @@ Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2
 | 2 | `prorythme`, `gnotes`, `n-prorythme`, `n-gnotes`, partition, export `.mid` | **fait** |
 | 3 | Transpileur, 36 séquences et 6 essais générés, enchaînement des parties | **fait** |
 | 4 | Validation contre le Lisp d'origine exécuté dans SBCL | **fait** : 1 456 072 notes identiques, sauf la séquence 29 (flottants, ≤ 3,6 ms) |
-| 5 | Lecteur Web MIDI et interface | **fait** (199 tests en tout) ; essayé en sortie simulée, pas encore avec Kontakt |
-| 6 | Exploitation continue (kiosque ou Node) | à faire |
+| 5 | Lecteur Web MIDI et interface | **fait** ; essayé en sortie simulée, pas encore avec Kontakt |
+| 6 | Exploitation continue : exécuteur Node headless, launchd, chien de garde | **exécuteur fait** (206 tests en tout) ; test d'endurance de 72 h et essai avec Kontakt à faire |
 
 ## Lancer les tests
 
-Il faut Node 20 ou plus récent. Le projet n'a aucune dépendance.
+Il faut Node 20 ou plus récent. La seule dépendance, optionnelle, est `@julusian/midi` (module natif RtMidi), qui ne sert qu'à l'exécuteur headless : `npm install` l'installe, et les tests n'en ont pas besoin.
 
 ```bash
 npm test
@@ -91,6 +91,50 @@ Sans sortie choisie, la lecture est simulée : rien ne sonne, mais les 16 encein
 - **Arrêt.** L'ordonnanceur envoie un note-off pour chaque note active, puis CC123 et CC120 sur tous les canaux, deux fois : tout de suite, puis après la fenêtre d'anticipation, pour couper aussi les notes déjà programmées.
 - **Essais.** Ils remplacent ce qui joue et s'arrêtent à leur fin. En 2013, le bouton remplaçait la partie, mais la minuterie de la partie suivante restait armée.
 
+## Exploitation sans navigateur : l'exécuteur headless (phase 6)
+
+L'exécuteur joue l'installation sous Node.js, sans interface. C'est la forme prévue pour une installation qui tourne en continu. Il reprend le noyau, les séquences, `g-parties` et l'ordonnanceur du lecteur web, avec une sortie MIDI native (`@julusian/midi`, CoreMIDI).
+
+```bash
+npm install                      # une fois : installe @julusian/midi
+npm run headless -- --liste      # sorties MIDI du système
+npm run headless                 # crée les ports virtuels « Animots A » et « Animots B » et joue
+```
+
+Dans Kontakt 8 en mode autonome (Options, onglet MIDI, rubrique Inputs), relier « Animots A » au port A et « Animots B » au port B. Les ports virtuels évitent les bus IAC. Pour passer quand même par des sorties existantes, il suffit d'indiquer une partie de leur nom : `npm run headless -- --sortie-a "IAC Bus 1" --sortie-b "IAC Bus 2"`.
+
+| Option | Effet |
+|---|---|
+| `--graine N` | graine de l'aléa (aléatoire par défaut) |
+| `--sortie-a NOM`, `--sortie-b NOM` | sortie existante dont le nom contient NOM, au lieu d'un port virtuel |
+| `--essai NOM` | joue un essai (`cercle1`, `cercle2`, `tutti`, `alterne`…) puis s'arrête |
+| `--duree S` | s'arrête après S secondes |
+| `--journal FICHIER` | une ligne par partie : date, numéro, séquence, durée, état de l'aléa |
+| `--battement FICHIER` | fichier réécrit toutes les 10 s, surveillé par le chien de garde |
+| `--eveille` | empêche la mise en veille tant que l'exécuteur tourne (`caffeinate`) |
+| `--simule` | aucune sortie MIDI |
+
+**Précision.** RtMidi envoie chaque message dès qu'on le lui donne. La sortie Node (`output/node-midi.js`) garde donc les messages dans une file datée, qu'elle vide toutes les millisecondes ; le retard mesuré à l'envoi est de 1 ms au plus. Contrairement au Web MIDI, elle peut annuler ce qui est programmé : l'arrêt est immédiat. Ctrl-C ou SIGTERM coupent le son, laissent partir les derniers messages et ferment les ports.
+
+**Essai réel.** Un second processus a écouté les ports virtuels pendant un essai Cercle1. Il a reçu par CoreMIDI les notes, une par seconde, puis les messages d'arrêt sur les deux ports.
+
+### Installation permanente (launchd)
+
+```bash
+deploy/install.sh                                         # ports virtuels
+deploy/install.sh --sortie-a "IAC Bus 1" --sortie-b "IAC Bus 2"
+deploy/install.sh --desinstaller
+```
+
+Le script installe deux agents launchd pour l'utilisateur courant :
+
+- **`com.grame.animots`** : l'exécuteur, démarré à l'ouverture de session et relancé s'il s'arrête (`KeepAlive`), avec `--journal`, `--battement` et `--eveille` ;
+- **`com.grame.animots-watchdog`** : le chien de garde (`deploy/watchdog.sh`). Chaque minute, il relance l'exécuteur si le battement n'a pas été réécrit depuis 2 minutes. C'est l'équivalent de `restart-animots` en 2013, qui relançait l'application au bout de 30 minutes sans activité.
+
+Journal, battement et sorties sont dans `~/Library/Logs/Animots/`. Les plists contiennent le chemin absolu de `node`, car launchd ne charge pas nvm : il faut relancer `deploy/install.sh` après un changement de version de Node, et refaire `npm install` (le module natif dépend de la version).
+
+Le script a été essayé dans un dossier personnel factice : plists validées par `plutil -lint`, et le chien de garde vérifié sur un battement ancien et sur un battement récent. **Il n'a pas été installé sur la machine.** Reste à faire : le test d'endurance de 72 heures avec Kontakt 8.
+
 ## Exporter une séquence en fichier MIDI
 
 ```bash
@@ -99,7 +143,6 @@ npm run export:mid -- 3 2013
 
 Les arguments sont le numéro de la séquence (1 à 36) ou le nom d'un essai (`cercle1`, `cercle2`, `tutti`, `alterne`, `essai`, `essai1bis`), la graine de l'aléa (2013 par défaut) et, en option, la durée en noires. Sans durée, elle est tirée comme dans `g-parties`. Le fichier `out/sequence-3-2013.mid` est au format 1, avec une piste par port (A et B, méta-événement « MIDI port ») à 5 040 ticks par noire. Le script affiche un résumé : durée, notes par canal, plage des hauteurs.
 
-Le prototype `../animots-js-poc/` est dépassé : il évaluait mal les silences, en leur passant des constantes au lieu de la hauteur et de la vélocité.
 
 ## Régénérer les séquences
 
@@ -146,6 +189,7 @@ transpiler/
   emit.js                 traduction des séquences et des essais en JavaScript
   generate.js             production des fichiers de piece/gerland/sequences/
 output/
+  node-midi.js            sortie MIDI Node : file datée, ports virtuels ou sorties existantes (RtMidi)
   player.js               ordonnanceur : anticipation, enchaînement des parties, notes actives, arrêt
   webmidi.js              sortie Web MIDI (ports A et B reliés à des sorties du système)
   simulated.js            sortie simulée (aucun son, sert à l'affichage et aux essais)
@@ -157,6 +201,10 @@ scripts/
   export-mid.js           calcule une séquence ou un essai et l'exporte en .mid
   transpile.js            régénère les séquences depuis source/ (--check : vérifie seulement)
   serve.js                serveur local de la page (127.0.0.1, port 8080 par défaut)
+  headless.js             exécuteur sans navigateur (npm run headless)
+deploy/
+  install.sh              installe ou retire les agents launchd (exécuteur et chien de garde)
+  watchdog.sh             relance l'exécuteur si son battement s'arrête
 tests/                    tests node:test, dont un test qui impose la documentation du code
   oracle-sequences.js     séquences 2 et 3 traduites à la main, référence du transpileur
 out/                      fichiers .mid produits (peut être effacé)
@@ -201,4 +249,5 @@ Le portage reproduit le comportement de 2013, y compris ces anomalies probables.
 - **Liste nue dans un rythme.** Une liste qui ne suit pas un symbole de n-olet (`((1 2) 3)`) provoque une erreur ici. En Lisp, elle passait sans erreur mais donnait une durée incohérente.
 - **Pitch-bend.** CLCE envoie un pitch-bend avant chaque note. Le port ne garde que ceux qui changent la valeur du canal, dans l'ordre du temps, ce qui a le même effet. Une note de vélocité 0 n'envoie pas le sien.
 - **Durée d'une partie.** C'est la fin de la dernière note (`score.end`), notes muettes comprises. Les notes en « long staccato » (`stac` de 3 à 8) peuvent résonner au-delà de la fin tirée, comme dans le Lisp. Le `msh-seq-all-duration` d'origine, qui fixait l'enchaînement, n'est pas dans les sources disponibles.
+- **Lecteur MidiShare de 2013 non émulé (décision du 25 novembre 2026).** Avant de jouer, `player` (`8Player.lisp`) ramenait les dates de 5 040 à 504 ticks par noire, avec un arrondi qui atteint 1 ms, et raccourcissait chaque note de 2 ticks à 504 par noire, soit environ 4 ms. Le portage joue la partition à 5 040 ticks par noire, avec la durée `floor(dur × stac) − 1` de CLCE. L'écart est inaudible. La phase 4 compare la partition écrite dans `*out*`, pas ce que le lecteur en jouait.
 - **`seq` en temps renversé.** À `ctime = etime`, `seq` rend NIL au lieu de l'erreur de `nth -1` du Lisp.

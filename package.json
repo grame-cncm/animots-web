@@ -12,6 +12,10 @@
     "export:mid": "node scripts/export-mid.js",
     "transpile": "node scripts/transpile.js",
     "serve": "node scripts/serve.js",
-    "check:lisp": "node validation/compare.js --seeds 20 --parties 20"
+    "check:lisp": "node validation/compare.js --seeds 20 --parties 20",
+    "headless": "node scripts/headless.js"
+  },
+  "optionalDependencies": {
+    "@julusian/midi": "^3.9.0"
   }
 }
