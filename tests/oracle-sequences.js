@@ -1,8 +1,9 @@
 /**
- * @file Séquences de Gerland2013-4.lsp traduites en JavaScript.
+ * @file Oracle : séquences 2 (« Nuit ») et 3 (« Jour ») traduites À LA MAIN, ligne à ligne.
  *
- * Phase 2 : séquences 2 (« Nuit ») et 3 (« Jour »), traduites à la main ligne à ligne pour
- * valider les processus. Les 34 autres viendront en phase 3, par un transpileur.
+ * Écrites en phase 2, avant le transpileur. tests/transpile.test.js vérifie que le code
+ * généré (piece/gerland/sequences/s02.js, s03.js) produit exactement la même partition,
+ * graine par graine : deux traductions indépendantes qui concordent.
  *
  * Chaque séquence garde la signature du Lisp, `(sequence-N deb fin)` : `deb` et `fin` sont des
  * générateurs, tirés une seule fois au début (`(g (car (l 1 deb)))`, voir `once`). Elle écrit
@@ -16,17 +17,17 @@
 import {
   add, sub, mult, h, s, rnd, rep, lst, concat, nconcat, parseRhythm, shareGen, useGen, freeGen,
   gnotes, prorythme, placeTempo,
-} from '../../core/index.js';
-import { xconcat, selAl, traj, once, placeProg, printDialog } from './tools.js';
-import { MULTIS, GACCORD_DEMI, GECAR, ZONE1, ZONE2, ZONE3, TEMPO, trajectoires } from './config.js';
+} from '../core/index.js';
+import { xconcat, selAl, traj, once, placeProg, printDialog } from '../piece/gerland/tools.js';
+import { MULTIS, GACCORD_DEMI, GECAR, ZONE1, ZONE2, ZONE3, TEMPO, trajectoires } from '../piece/gerland/config.js';
 
 /**
  * Séquence 2 (5' à 10'), « Nuit », multi M2, version pour 16 points (lignes 886 à 914).
  * Fond de nuit tenu sur une enceinte sur deux, oiseaux et insectes aléatoires répétés 1 ou
  * 2 fois sur un même canal, diffusés sur 3 enceintes (une par zone).
- * @param {import('../../core/score.js').Score} score
- * @param {import('../../core/generators.js').GenLike} deb Début (noires).
- * @param {import('../../core/generators.js').GenLike} fin Fin (noires).
+ * @param {import('../core/score.js').Score} score
+ * @param {import('../core/generators.js').GenLike} deb Début (noires).
+ * @param {import('../core/generators.js').GenLike} fin Fin (noires).
  * @returns {void}
  */
 export function sequence2(score, deb, fin) {
@@ -58,9 +59,9 @@ export function sequence2(score, deb, fin) {
  * Séquence 3 (5' à 10'), « Jour », multi M2 (lignes 937 à 1039) : fond général de jour
  * (proba 3/4), chant répété d'un oiseau par zone, un son d'oiseau sur un canal quelconque,
  * phrases monocanal d'oiseaux par zone, trajectoires d'oiseaux de 12, 15 ou 18 points.
- * @param {import('../../core/score.js').Score} score
- * @param {import('../../core/generators.js').GenLike} deb Début (noires).
- * @param {import('../../core/generators.js').GenLike} fin Fin (noires).
+ * @param {import('../core/score.js').Score} score
+ * @param {import('../core/generators.js').GenLike} deb Début (noires).
+ * @param {import('../core/generators.js').GenLike} fin Fin (noires).
  * @returns {void}
  */
 export function sequence3(score, deb, fin) {
@@ -120,5 +121,5 @@ export function sequence3(score, deb, fin) {
   freeGen('ntraj');
 }
 
-/** Séquences traduites, par numéro. */
-export const SEQUENCES = Object.freeze({ 2: sequence2, 3: sequence3 });
+/** Séquences de l'oracle, par numéro. */
+export const ORACLE = Object.freeze({ 2: sequence2, 3: sequence3 });

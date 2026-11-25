@@ -1,9 +1,14 @@
 /**
  * @file Export d'une partition en fichier MIDI standard (SMF).
  *
- * Format 1 : une piste de tempo, puis une piste par port (A, puis B), chacune marquée par le
- * méta-événement « MIDI port » (FF 21) pour que les séquenceurs qui le comprennent rendent les
- * 32 canaux. Résolution : 5 040 ticks par noire, comme `noi` dans CLCE.
+ * Format 1 : une piste de tempo, puis une piste par port (A et B toujours, C et D s'ils sont
+ * utilisés), chacune marquée par le méta-événement « MIDI port » (FF 21) pour que les
+ * séquenceurs qui le comprennent rendent tous les canaux. Résolution : 5 040 ticks par noire,
+ * comme `noi` dans CLCE.
+ *
+ * Le port C n'apparaît que dans la séquence 21 : un `laccord` y ajoute jusqu'à 14 à des canaux
+ * du port B, ce qui donne des super-canaux de 32 à 45. Le multi de 2013 n'avait d'instruments
+ * que sur les ports A et B : ces notes étaient muettes. Elles sont gardées dans le fichier.
  *
  * Le fichier sert à écouter et à comparer les parties hors temps réel (dans un séquenceur relié
  * à Kontakt), pas à jouer l'installation, qui passe par le lecteur MIDI.
@@ -59,7 +64,8 @@ export function toSMF(score) {
     return { tick: m.tick, data: [0xff, 0x51, 3, (mpq >> 16) & 255, (mpq >> 8) & 255, mpq & 255] };
   });
   const tracks = [track(tempoTrack)];
-  for (const port of [0, 1]) {
+  const ports = [...new Set([0, 1, ...msgs.filter((m) => m.port >= 0).map((m) => m.port)])].sort((a, b) => a - b);
+  for (const port of ports) {
     tracks.push(track([
       { tick: 0, data: [0xff, 0x21, 1, port] },
       ...msgs.filter((m) => m.port === port),
