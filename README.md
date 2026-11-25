@@ -9,8 +9,8 @@ Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2
 | 1 | Noyau des générateurs, rythmes, outils et données de Gerland, tests | **fait** |
 | 2 | `prorythme`, `gnotes`, `n-prorythme`, `n-gnotes`, partition, export `.mid` | **fait** |
 | 3 | Transpileur, 36 séquences et 6 essais générés, enchaînement des parties | **fait** |
-| 4 | Validation de fidélité (statistiques, écoute) | à faire |
-| 5 | Lecteur Web MIDI et interface | **fait** (194 tests en tout) ; essayé en sortie simulée, pas encore avec Kontakt |
+| 4 | Validation contre le Lisp d'origine exécuté dans SBCL | **fait** : 1 456 072 notes identiques, sauf la séquence 29 (flottants, ≤ 3,6 ms) |
+| 5 | Lecteur Web MIDI et interface | **fait** (199 tests en tout) ; essayé en sortie simulée, pas encore avec Kontakt |
 | 6 | Exploitation continue (kiosque ou Node) | à faire |
 
 ## Lancer les tests
@@ -20,6 +20,54 @@ Il faut Node 20 ou plus récent. Le projet n'a aucune dépendance.
 ```bash
 npm test
 ```
+
+## Validation contre le Lisp d'origine (phase 4)
+
+```bash
+npm run check:lisp
+```
+
+La commande lance le **code Lisp de 2013 lui-même** dans SBCL : les sources CLCE de `source/clce/` et `source/Gerland2013-4.lsp`, chargés sans modification. Elle calcule les mêmes cas que le portage et compare les deux partitions note à note : date, port, canal, hauteur, durée et vélocité, ainsi que les CC9 et le tempo. Les cas couvrent les 36 séquences, les 6 essais et des enchaînements de parties par `g-parties`, sur 20 graines. Il faut SBCL (MacPorts : `sudo port install sbcl`). Sans SBCL, la comparaison est sautée dans `npm test`.
+
+Le banc (`validation/lisp/harness.lisp`) remplace seulement ce qui n'existe plus :
+
+- **MidiShare** : des bouchons qui enregistrent les événements, avec la sémantique de curseur de CLCE (`midi-move`, `midi-write-ev`, `midi-send-im`) ;
+- **CAPI et MP** : la fenêtre et les minuteries de LispWorks, réduites à des fonctions vides ;
+- **`random`** : le même générateur que `core/random.js`. Si le portage est fidèle, les deux programmes font donc les mêmes tirages, dans le même ordre.
+
+Deux adaptations à SBCL :
+
+- `reverse` est masqué, parce que CLCE déclare `special` une variable de ce nom, ce que SBCL refuse pour un symbole de Common Lisp ;
+- `lisp-image-name`, propre à LispWorks, est remplacé par un chemin factice.
+
+**Résultat** (20 graines, 860 cas, 1 456 072 notes) :
+
+- Les 35 autres séquences, les 6 essais et les 20 enchaînements de parties sont **identiques au tick près**.
+- La **séquence 29** ajoute aux dates des décimales (`transf-dat`, ±0.05…), qui sont des flottants simple précision en Lisp et des doubles en JavaScript. Ses notes ont les mêmes hauteurs et les mêmes vélocités, mais leurs dates dérivent de 18 ticks au plus (3,6 ms). Sur les 20 graines, une seule note a franchi une limite de `seq` et changé de hauteur. Cette séquence est déclarée dans `FLOAT_SENSITIVE` (`validation/compare.js`), avec sa raison.
+
+**Le comparateur détecte bien les vraies infidélités.** Trois erreurs subtiles ont été introduites puis retirées, et toutes ont été repérées :
+
+| Erreur introduite | Cas en écart, sur 126 |
+|---|---|
+| `laccord` évalué une seule fois dans `gnotes` | 24 |
+| `sel-al` de Gerland non borné | 3 |
+| `rep` qui tire la valeur avant le nombre de répétitions | 81 |
+
+### Sources CLCE de 2013
+
+Les fichiers compilés de l'installation datent du 28 mars 2013. Pour chaque fichier, `source/clce/` contient la source la plus récente antérieure à cette date :
+
+| Fichier | Version | Provenance |
+|---|---|---|
+| 1-TimeGenerators.lisp | 1er octobre 2012 | `CLCE/Tools/3-Music/3-XTD-CLCE/3-TimeGenerator/` |
+| 1MidiShare-Tempi.lisp | 10 octobre 2011 | `LispMidi-move/Tools/4-Prorythme/` |
+| 2GenerateursPAJ.lisp | 21 septembre 2010 | idem |
+| 3Note-Midi-Finale.lisp | 14 décembre 2012 | idem, `3Note-Midi-Finale.lisp~` |
+| 4Processus.lisp | 28 mars 2013 | idem |
+| 6Enigma.lisp | 4 décembre 2012 | idem |
+| 7Rythmes.lisp | 9 octobre 2011 | idem, `7Rythmes.lisp~` |
+
+Les versions plus récentes (2015, 2017), d'où le portage était parti, n'en diffèrent que par des ajouts inutilisés par Gerland (`ggnot`, `gmod`, `vrai-dur`) et par une réécriture équivalente (`p-abs` au lieu de `midi-move`).
 
 ## Jouer l'installation vers Kontakt 8
 
@@ -89,6 +137,10 @@ piece/gerland/
   sequences/              GÉNÉRÉ : s01.js à s36.js, essais.js, index.js (tables SEQUENCES et ESSAIS)
 source/
   Gerland2013-4.lsp       source Lisp d'origine (ISO-8859-1, fins de ligne CR), non modifié
+  clce/                   sources CLCE de 2013 utilisées par Gerland, non modifiées
+validation/
+  compare.js              phase 4 : compare Lisp (SBCL) et JavaScript note à note (npm run check:lisp)
+  lisp/harness.lisp       banc SBCL : charge CLCE et Gerland d'origine, bouchons MidiShare, aléa commun
 transpiler/
   reader.js               lecteur Lisp qui garde commentaires et numéros de ligne
   emit.js                 traduction des séquences et des essais en JavaScript
@@ -145,7 +197,7 @@ Le portage reproduit le comportement de 2013, y compris ces anomalies probables.
 
 ## Écarts connus avec le Lisp
 
-- **Rationnels.** Le Lisp calcule en rationnels exacts, le port en flottants. Les durées restent exactes au tick près grâce à `ticks()`.
+- **Rationnels et flottants.** Le Lisp calcule en rationnels exacts, le portage en flottants doubles. Les durées restent exactes au tick près grâce à `ticks()`, comme la phase 4 l'a vérifié. Seule exception : les décimales de la séquence 29, qui sont des flottants simple précision en Lisp et donnent jusqu'à 3,6 ms d'écart.
 - **Liste nue dans un rythme.** Une liste qui ne suit pas un symbole de n-olet (`((1 2) 3)`) provoque une erreur ici. En Lisp, elle passait sans erreur mais donnait une durée incohérente.
 - **Pitch-bend.** CLCE envoie un pitch-bend avant chaque note. Le port ne garde que ceux qui changent la valeur du canal, dans l'ordre du temps, ce qui a le même effet. Une note de vélocité 0 n'envoie pas le sien.
 - **Durée d'une partie.** C'est la fin de la dernière note (`score.end`), notes muettes comprises. Les notes en « long staccato » (`stac` de 3 à 8) peuvent résonner au-delà de la fin tirée, comme dans le Lisp. Le `msh-seq-all-duration` d'origine, qui fixait l'enchaînement, n'est pas dans les sources disponibles.
