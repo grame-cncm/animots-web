@@ -26,11 +26,29 @@ Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2
 
 ## Lancer les tests
 
-Il faut Node 20 ou plus récent. La seule dépendance, optionnelle, est `@julusian/midi` (module natif RtMidi), qui ne sert qu'à l'exécuteur headless : `npm install` l'installe, et les tests n'en ont pas besoin.
+Il faut Node 20 ou plus récent. Les deux dépendances sont facultatives et ne servent qu'à l'exécuteur headless :
+
+- `@julusian/midi` (module natif RtMidi) pour la sortie MIDI ;
+- `node-web-audio-api` pour l'échantillonneur intégré sous Node.
+
+`npm install` les installe. Les tests n'en ont pas besoin : ceux qui en dépendent sont sautés quand elles manquent.
 
 ```bash
 npm test
 ```
+
+## Raccourcis (Makefile)
+
+`make` (ou `make help`) liste les cibles et les variables :
+
+| Cible | Effet |
+|---|---|
+| `make web` | serveur local de la page, sur http://localhost:8080/ui/ |
+| `make web-auto` | serveur local, puis Chrome (profil dédié, autoplay permis) qui charge le SoundFont et démarre seul l'installation |
+| `make echantillonneur` | exécuteur headless par l'échantillonneur intégré, sur la sortie audio par défaut |
+| `make muet` | la même chose, sans son |
+
+Variables : `SF2` (par défaut `../conversion-multi/gerland.sf2`, fabriqué par `scripts/soundfont.js`), `GRAINE` (2013), `PORT` (8080). Exemple : `make web-auto GRAINE=7`.
 
 ## Validation contre le Lisp d'origine (phase 4)
 
@@ -104,7 +122,7 @@ Sans sortie choisie, la lecture est simulée : rien ne sonne, mais l'écran mont
 
 ### Prototype : l'échantillonneur intégré (RustySynth), à la place de Kontakt
 
-Branche `rustysynth`. La page peut jouer elle-même un SoundFont (`.sf2`), sans MIDI ni Kontakt. Le moteur est RustySynth, compilé en WebAssembly et joué dans un AudioWorklet (`output/rustysynth/`, copié de la branche `wasm` du clone de rustysynth). Dans le panneau Sortie, cocher **Échantillonneur intégré** et choisir un SoundFont. Le fichier reste dans le cache du navigateur, ce qui permet au démarrage automatique de le retrouver. `ui/?sf2=<adresse>` donne le SoundFont par une adresse sur le même site, et active l'échantillonneur.
+La page peut jouer elle-même un SoundFont (`.sf2`), sans MIDI ni Kontakt. Le moteur est RustySynth, compilé en WebAssembly et joué dans un AudioWorklet (`output/rustysynth/`, copié de la branche `wasm` de [sletz/rustysynth](https://github.com/sletz/rustysynth), commit `3cb4a02` ; licence MIT de RustySynth dans `output/rustysynth/LICENSE.txt`). Dans le panneau Sortie, cocher **Échantillonneur intégré** et choisir un SoundFont. Le fichier reste dans le cache du navigateur, ce qui permet au démarrage automatique de le retrouver. `ui/?sf2=<adresse>` donne le SoundFont par une adresse sur le même site, et active l'échantillonneur.
 
 La sortie `output/rustysynth.js` reprend la correspondance du multi Kontakt :
 
@@ -375,9 +393,9 @@ output/
   player.js               ordonnanceur : anticipation, enchaînement des parties, notes actives, arrêt
   webmidi.js              sortie Web MIDI (ports A et B reliés à des sorties du système)
   simulated.js            sortie simulée (aucun son, sert à l'affichage et aux essais)
-  rustysynth.js           sortie vers l'échantillonneur intégré (prototype, branche rustysynth)
+  rustysynth.js           sortie vers l'échantillonneur intégré (prototype)
   rustysynth-node.js      échantillonneur intégré sous Node (node-web-audio-api), pour l'exécuteur headless
-  rustysynth/             worklet et module WebAssembly de RustySynth (copiés, ne pas modifier ici)
+  rustysynth/             worklet, module WebAssembly et licence MIT de RustySynth (copiés, ne pas modifier ici)
   ticker.js, ticker-worker.js  battement de l'ordonnanceur (Worker, ou setInterval en repli)
   smf.js                  export en fichier MIDI standard, et relecture pour vérification
 ui/
