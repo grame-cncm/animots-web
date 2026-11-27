@@ -94,6 +94,56 @@ test('boucle : la partie suivante commence exactement à la fin de la précéden
   assert.equal(player.current().score.label, 'P2');
 });
 
+test('boucle : une partie vide (durée nulle) est annoncée puis passée, la boucle continue', () => {
+  const clock = fakeClock(), sink = fakeSink();
+  const parts = [];
+  const states = [];
+  // P0 normale, puis deux parties vides de suite, puis des parties normales
+  const suite = ['P0', 'vide1', 'vide2'];
+  let k = 0;
+  const player = new Player({
+    sink, now: clock.now,
+    onPart: (sc, start, end) => parts.push([sc.label, Math.round(start), Math.round(end)]),
+    onState: (s) => states.push(s),
+  });
+  player.startLoop(() => {
+    const label = suite[k] ?? `P${k}`;
+    k++;
+    if (label.startsWith('vide')) { const sc = new Score(); sc.label = label; return sc; }
+    return beats(2, label);
+  });
+  run(player, clock, 6100);
+  assert.deepEqual(parts.slice(0, 5), [
+    ['P0', 1200, 3200], ['vide1', 3200, 3200], ['vide2', 3200, 3200], ['P3', 3200, 5200], ['P4', 5200, 7200],
+  ]);
+  assert.equal(player.state, 'boucle');
+  assert.ok(!states.includes('arrêt'), `la boucle ne doit pas s’arrêter (${states.join(', ')})`);
+});
+
+test('boucle : des parties toutes vides ne bloquent pas un battement', () => {
+  const clock = fakeClock(), sink = fakeSink();
+  let calls = 0;
+  const player = new Player({ sink, now: clock.now });
+  player.startLoop(() => { calls++; const sc = new Score(); sc.label = 'vide'; return sc; });
+  clock.t += 300;
+  player.tick();
+  assert.ok(calls <= Player.MAX_PARTS_PER_TICK + 2, `${calls} parties calculées en un battement`);
+  assert.equal(player.state, 'boucle');
+});
+
+test('Gerland, graine 7 : la partie 2 est vide (séquence 1, comme en Lisp), la boucle continue', () => {
+  const clock = fakeClock(), sink = fakeSink();
+  const parts = [];
+  seed(7);
+  sharedGenerators.reset();
+  const parties = gParties();
+  const player = new Player({ sink, now: clock.now, onPart: (sc, start, end) => parts.push([sc.label, Math.round((end - start) / 1000)]) });
+  player.startLoop(() => calculPartie(parties));
+  run(player, clock, 55000); // la séquence 6 commence après 25 s + 0 s + 25 s
+  assert.deepEqual(parts.slice(0, 4), [['SEQUENCE 1', 25], ['SEQUENCE 1', 0], ['SEQUENCE 1', 25], ['SEQUENCE 6', 362]]);
+  assert.equal(player.state, 'boucle');
+});
+
 test('stop : note-off des notes actives, CC123 et CC120 maintenant et après la fenêtre', () => {
   const clock = fakeClock(), sink = fakeSink([0, 1]);
   const player = new Player({ sink, now: clock.now, lookahead: 1000 });

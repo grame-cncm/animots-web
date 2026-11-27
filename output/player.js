@@ -51,6 +51,9 @@
 
 /** Ordonnanceur de lecture. */
 export class Player {
+  /** Parties enchaînées au plus en un battement (des parties vides peuvent se suivre). */
+  static MAX_PARTS_PER_TICK = 16;
+
   /**
    * @param {object} options
    * @param {Sink} options.sink Sortie MIDI.
@@ -127,17 +130,32 @@ export class Player {
   tick() {
     if (this.state === 'arrêt') return;
     const t = this.now(), horizon = t + this.lookahead;
-    // en boucle, la partie suivante est calculée dès que la courante est seule dans la file
-    if (this.state === 'boucle' && this.queue.length === 1 && this.nextPart) {
-      this.queue.push(this.schedule(this.nextPart(), this.queue[0].end));
+    // Une partie peut être vide, de durée nulle : la séquence 1 tirée par g-parties évalue deux
+    // fois sa fin aléatoire, et n'écrit rien quand le second tirage dépasse le premier. Elle est
+    // finie dès qu'elle commence. Il faut donc, en boucle, recalculer une partie d'avance après
+    // chaque partie retirée, sans quoi la file se vide et la boucle s'arrête. La limite par
+    // battement protège d'une suite sans fin de parties vides.
+    let lastEnd = this.queue.at(-1)?.end ?? t;
+    for (let rounds = 0; rounds < Player.MAX_PARTS_PER_TICK; rounds++) {
+      // en boucle, la partie suivante est calculée dès que la courante est seule dans la file
+      // (ou dès que la file est vide, si la courante était vide elle aussi)
+      if (this.state === 'boucle' && this.queue.length <= 1 && this.nextPart) {
+        this.queue.push(this.schedule(this.nextPart(), this.queue[0]?.end ?? lastEnd));
+      }
+      for (const p of this.queue) {
+        while (p.next < p.msgs.length && p.msgs[p.next].time <= horizon) this.emit(p.msgs[p.next++]);
+        if (!p.announced && p.start <= t) { p.announced = true; this.onPart(p.score, p.start, p.end); }
+      }
+      // une partie est finie quand tout est envoyé et que sa fin est passée
+      const before = this.queue.length;
+      while (this.queue.length && this.queue[0].next >= this.queue[0].msgs.length && this.queue[0].end <= t) {
+        lastEnd = this.queue.shift().end;
+      }
+      // une partie retirée, en boucle : la suivante est peut-être à calculer, on recommence
+      if (this.queue.length === before || this.state !== 'boucle' || !this.nextPart) break;
     }
-    for (const p of this.queue) {
-      while (p.next < p.msgs.length && p.msgs[p.next].time <= horizon) this.emit(p.msgs[p.next++]);
-      if (!p.announced && p.start <= t) { p.announced = true; this.onPart(p.score, p.start, p.end); }
-    }
-    // une partie est finie quand tout est envoyé et que sa fin est passée
-    while (this.queue.length && this.queue[0].next >= this.queue[0].msgs.length && this.queue[0].end <= t) this.queue.shift();
-    if (this.queue.length === 0) this.setState('arrêt');
+    // en boucle, une file vidée par une suite de parties vides se remplit au battement suivant
+    if (this.queue.length === 0 && !(this.state === 'boucle' && this.nextPart)) this.setState('arrêt');
   }
 
   /**
