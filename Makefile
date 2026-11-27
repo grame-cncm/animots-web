@@ -3,9 +3,12 @@
 SF2 ?= ../conversion-multi/gerland.sf2
 GRAINE ?= 2013
 PORT ?= 8080
+CHROME ?= /Applications/Google Chrome.app
+# profil Chrome dédié : n'interfère ni avec le Chrome habituel ni avec le profil du kiosque
+PROFIL ?= $(HOME)/Library/Application Support/Animots/Chrome-web-auto
 
 .DEFAULT_GOAL := help
-.PHONY: help echantillonneur muet web
+.PHONY: help echantillonneur muet web web-auto
 
 help: ## Affiche cette aide
 	@echo "Cibles :"
@@ -25,4 +28,14 @@ muet: ## Comme echantillonneur, mais sans son (essai : le journal montre les par
 	node scripts/headless.js --echantillonneur $(SF2) --graine $(GRAINE) --muet
 
 web: ## Lance le serveur web local : page sur http://localhost:8080/ui/ (PORT=… pour un autre port ; Ctrl-C arrête)
+	node scripts/serve.js $(PORT)
+
+web-auto: ## Serveur local + Chrome qui charge le SoundFont SF2 et démarre seul l'installation (son compris)
+	@test -f "$(SF2)" || { echo "SoundFont introuvable : $(SF2) (make web-auto SF2=…)"; exit 1; }
+	@mkdir -p out
+	@ln -sf "$(abspath $(SF2))" out/soundfont.sf2
+	@echo "Ouverture de Chrome dans 1 s ; Ctrl-C arrête le serveur (fermer aussi la fenêtre de Chrome)."
+	@(sleep 1; open -na "$(CHROME)" --args --user-data-dir="$(PROFIL)" --no-first-run \
+	  --autoplay-policy=no-user-gesture-required --new-window \
+	  "http://localhost:$(PORT)/ui/?demarrer&sansmidi&graine=$(GRAINE)&sf2=../out/soundfont.sf2") &
 	node scripts/serve.js $(PORT)

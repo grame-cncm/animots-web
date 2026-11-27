@@ -12,6 +12,9 @@
  *   de la retrouver (`setRandomState`), comme le fichier `animots-session` de 2013.
  * - `ui/?demarrer` lance la boucle tout seul au chargement (`&graine=N` pour une graine fixe) :
  *   c'est ce qu'utilise le démarrage en kiosque de deploy/install-web.sh.
+ * - `&sansmidi` ne demande pas l'accès MIDI : sur un profil Chrome neuf, la demande
+ *   d'autorisation bloquerait le démarrage automatique. Sert avec l'échantillonneur intégré
+ *   (`&sf2=<adresse>`), par exemple pour `make web-auto`.
  */
 
 import { seed, getRandomState, sharedGenerators, Score } from '../core/index.js';
@@ -257,8 +260,10 @@ for (const [port, id] of [[0, 'port-a'], [1, 'port-b']]) {
   });
 }
 
-/** Accès MIDI établi (ou refusé) : le démarrage automatique attend ce moment. */
-const midiReady = openWebMidi()
+/** Accès MIDI établi (ou refusé, ou pas demandé) : le démarrage automatique attend ce moment. */
+const midiReady = (new URLSearchParams(location.search).has('sansmidi')
+  ? Promise.reject(new Error('Accès MIDI non demandé (?sansmidi) : seul l’échantillonneur intégré sonne.'))
+  : openWebMidi())
   .then((m) => {
     midi = m;
     fillOutputs();
