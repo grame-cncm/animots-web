@@ -55,12 +55,18 @@ test('ScheduledSink : clear annule ce qui est programmé', () => {
 test('ScheduledSink : start et stopTimer vident la file en temps réel', async () => {
   const out = [];
   const sink = new ScheduledSink({ sendNow: (p, d) => out.push(d), ports: () => [0] });
-  sink.send(0, [1], performance.now() + 20);
+  const due = performance.now() + 20;
+  sink.send(0, [1], due);
+  // Minuterie témoin, réglée sur la même heure. Quand les tests tournent en parallèle, la boucle
+  // d'événements peut être bloquée plusieurs dizaines de millisecondes : la sortie ne peut pas
+  // être plus à l'heure que cette boucle. On ne lui reproche que le retard qui lui est propre.
+  let loopLate = 0;
+  setTimeout(() => { loopLate = performance.now() - due; }, 20);
   sink.start();
   await new Promise((r) => setTimeout(r, 60));
   sink.stopTimer();
   assert.deepEqual(out, [[1]]);
-  assert.ok(sink.maxLate < 20);
+  assert.ok(sink.maxLate < loopLate + 20, `retard ${sink.maxLate.toFixed(1)} ms, boucle d'événements ${loopLate.toFixed(1)} ms`);
 });
 
 test('parseArgs : options et erreurs', () => {
