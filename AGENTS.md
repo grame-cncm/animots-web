@@ -52,7 +52,7 @@ git merge --ff-only ma-branche # avance rapide : refuse de créer un commit de f
 - Le refus des fusions peut être rendu automatique, dans un clone par `git config merge.ff only`, et sur GitHub par la règle « Require linear history » de la protection de `main`. Ces deux réglages reviennent à l'utilisateur.
 - Une étiquette (`vX.Y`) désigne un commit de `main`. Un rebase ultérieur doit le laisser ancêtre de `main` : `git merge-base --is-ancestor vX.Y main` le vérifie.
 
-Le 27 novembre 2026, la branche `rustysynth` avait d'abord été fusionnée dans `main` par un commit de fusion, alors que rien n'était encore poussé. `main` a été linéarisée par `git rebase`, avec le même arbre de fichiers à l'arrivée. L'ancien état est gardé dans la branche locale `sauvegarde/main-avant-lineaire`, à supprimer une fois la nouvelle `main` poussée.
+Le 27 novembre 2026, la branche `rustysynth` avait d'abord été fusionnée dans `main` par un commit de fusion, alors que rien n'était encore poussé. `main` a été linéarisée par `git rebase`, avec le même arbre de fichiers à l'arrivée, puis poussée. Les branches devenues inutiles (`rustysynth` et la sauvegarde de l'ancien état) ont été supprimées.
 
 ## Pièges déjà rencontrés
 
