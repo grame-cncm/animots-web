@@ -53,6 +53,16 @@ test('evaluateHealth : chaque cause de bascule', () => {
   }
 });
 
+test('evaluateHealth : l’échantillonneur intégré en marche remplace le MIDI, suspendu il ne compte pas', () => {
+  const sansMidi = { ...SAIN, webMidi: false, sortiesMidi: [] };
+  assert.deepEqual(evaluateHealth({ ...sansMidi, echantillonneur: 'en marche' }), { ok: true, raison: '' });
+  const h = evaluateHealth({ ...SAIN, echantillonneur: 'suspended' });
+  assert.equal(h.ok, false);
+  assert.match(h.raison, /échantillonneur intégré muet \(contexte audio « suspended »\)/);
+  assert.match(evaluateHealth({ ...sansMidi, echantillonneur: null }).raison, /Web MIDI refusé/);
+  assert.equal(evaluateHealth({ ...sansMidi, echantillonneur: 'en marche', battementMs: 9000 }).ok, false);
+});
+
 test('evaluateHealth : --accepter-simule accepte une lecture simulée, pas une boucle arrêtée', () => {
   assert.equal(evaluateHealth({ ...SAIN, webMidi: false, sortiesMidi: [] }, { accepterSimule: true }).ok, true);
   assert.equal(evaluateHealth({ ...SAIN, etat: 'arrêt' }, { accepterSimule: true }).ok, false);

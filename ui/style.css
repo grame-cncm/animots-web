@@ -71,6 +71,10 @@ main {
 .etat[data-etat="boucle"], .etat[data-etat="unique"] { color: var(--accent); }
 .ports { display: grid; gap: 8px; margin-top: 8px; }
 .ports label, .graine { display: grid; grid-template-columns: 60px 1fr; align-items: center; gap: 8px; }
+.echantillonneur { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bord); }
+.echantillonneur label { display: flex; align-items: center; gap: 8px; }
+.echantillonneur input[type="checkbox"] { width: auto; }
+.echantillonneur input[type="file"] { flex: 1; min-width: 0; }
 select, input, button { font: inherit; color: inherit; }
 select, input { width: 100%; padding: 6px 8px; border: 1px solid var(--bord); border-radius: 6px; background: var(--fond); }
 .boutons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }

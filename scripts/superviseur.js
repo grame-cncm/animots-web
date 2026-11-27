@@ -105,6 +105,8 @@ export function parseArgs(argv) {
  * @property {number} envoyes Messages MIDI envoyés depuis le chargement.
  * @property {Array<number>} sortiesMidi Ports reliés à une sortie MIDI réelle.
  * @property {boolean} webMidi Accès Web MIDI obtenu.
+ * @property {string|null} [echantillonneur] Échantillonneur intégré : null s'il n'est pas activé,
+ *   « en marche » s'il joue, sinon l'état de son contexte audio.
  * @property {number} battementMs Temps depuis le dernier battement de l'ordonnanceur.
  * @property {string|null} sequence Partie qui sonne.
  * @property {string} version Version jouée.
@@ -119,8 +121,13 @@ export function parseArgs(argv) {
 export function evaluateHealth(diag, { accepterSimule = false } = {}) {
   if (!diag) return { ok: false, raison: 'page sans diagnostic (pas chargée, ou version trop ancienne)' };
   if (diag.etat !== 'boucle') return { ok: false, raison: `boucle des parties arrêtée (état « ${diag.etat} »)` };
-  if (!accepterSimule && !diag.webMidi) return { ok: false, raison: 'Web MIDI refusé ou indisponible : lecture simulée, muette' };
-  if (!accepterSimule && !(diag.sortiesMidi.includes(0) && diag.sortiesMidi.includes(1))) {
+  if (diag.echantillonneur && diag.echantillonneur !== 'en marche') {
+    return { ok: false, raison: `échantillonneur intégré muet (contexte audio « ${diag.echantillonneur} »)` };
+  }
+  // l'échantillonneur intégré sonne dans la page : le MIDI n'est alors pas nécessaire
+  const midiNeeded = !accepterSimule && diag.echantillonneur !== 'en marche';
+  if (midiNeeded && !diag.webMidi) return { ok: false, raison: 'Web MIDI refusé ou indisponible : lecture simulée, muette' };
+  if (midiNeeded && !(diag.sortiesMidi.includes(0) && diag.sortiesMidi.includes(1))) {
     return { ok: false, raison: 'ports A et B non reliés à des sorties MIDI : lecture simulée, muette' };
   }
   if (diag.battementMs > 5000) return { ok: false, raison: `ordonnanceur arrêté (dernier battement il y a ${Math.round(diag.battementMs / 1000)} s)` };

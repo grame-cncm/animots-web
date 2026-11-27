@@ -22,6 +22,7 @@ import { openWebMidi } from '../output/webmidi.js';
 import { SimulatedSink } from '../output/simulated.js';
 import { startTicker } from '../output/ticker.js';
 import { toSMF } from '../output/smf.js';
+import { RustySynthSink } from '../output/rustysynth.js';
 
 /**
  * Élément de la page par identifiant.
@@ -86,10 +87,144 @@ let midi = null;
  * @type {import('../output/player.js').Sink}
  */
 const sink = {
-  send(port, data, time) { sim.send(port, data, time); midi?.send(port, data, time); },
+  send(port, data, time) { sim.send(port, data, time); midi?.send(port, data, time); rs?.send(port, data, time); },
   ports() { const p = midi?.ports() ?? []; return p.length ? p : [0, 1]; },
-  clear() { midi?.clear(); },
+  clear() { midi?.clear(); rs?.clear(); },
 };
+
+// ________________________________________________________ échantillonneur intégré (prototype)
+
+/** @type {RustySynthSink | null} Sortie RustySynth, quand l'échantillonneur est prêt. */
+let rs = null;
+/** @type {AudioContext | null} */
+let audio = null;
+
+/** Cache du navigateur qui garde le SoundFont choisi, pour le démarrage automatique. */
+const SF2_CACHE = 'animots-soundfont';
+const SF2_KEY = 'soundfont.sf2';
+
+/**
+ * Montre l'état de l'échantillonneur.
+ * @param {string} text
+ * @returns {void}
+ */
+function rsStatus(text) { $('rs-statut').textContent = text; }
+
+/**
+ * SoundFont gardé dans le cache du navigateur, ou null.
+ * @returns {Promise<{bytes: ArrayBuffer, name: string} | null>}
+ */
+async function storedSoundFont() {
+  try {
+    const r = await (await caches.open(SF2_CACHE)).match(SF2_KEY);
+    return r ? { bytes: await r.arrayBuffer(), name: r.headers.get('x-nom') ?? SF2_KEY } : null;
+  } catch { return null; }
+}
+
+/**
+ * Garde un SoundFont dans le cache du navigateur.
+ * @param {ArrayBuffer} bytes
+ * @param {string} name
+ * @returns {Promise<void>}
+ */
+async function storeSoundFont(bytes, name) {
+  try {
+    const headers = { 'content-type': 'application/octet-stream', 'x-nom': encodeURIComponent(name) };
+    await (await caches.open(SF2_CACHE)).put(SF2_KEY, new Response(bytes, { headers }));
+  } catch (e) { journal(`SoundFont non gardé dans le cache : ${e.message}`, true); }
+}
+
+/**
+ * Démarre l'échantillonneur avec le SoundFont gardé (ou ne fait rien s'il n'y en a pas).
+ * @returns {Promise<void>}
+ */
+async function startSampler() {
+  stopSampler();
+  const sf = await storedSoundFont();
+  if (!sf) { rsStatus('Choisir un SoundFont (.sf2).'); return; }
+  const name = decodeURIComponent(sf.name);
+  rsStatus(`Chargement de ${name}…`);
+  try {
+    audio = new AudioContext({ latencyHint: 'playback' });
+    const wasm = await fetch('../output/rustysynth/rustysynth_wasm.wasm').then((r) => r.arrayBuffer());
+    const r = await RustySynthSink.create(audio, { sf2: sf.bytes, wasm, processorUrl: '../output/rustysynth/rustysynth-processor.js' });
+    rs = r.sink;
+    const voies = r.separees ? `16 voies séparées (la carte en a ${r.max})` : `carte à ${r.max} voies : les 16 enceintes sont repliées en stéréo`;
+    rsStatus(`${name} : ${r.presets} presets, ${audio.sampleRate} Hz, ${voies}.`);
+    journal(`échantillonneur prêt : ${name}, ${r.presets} presets, ${voies}`, !r.separees);
+    audio.onstatechange = () => showAudioState();
+    showAudioState();
+  } catch (e) {
+    stopSampler();
+    rsStatus(`Échantillonneur indisponible : ${e.message}`);
+    journal(`échantillonneur indisponible : ${e.message}`, true);
+  }
+}
+
+/**
+ * Arrête l'échantillonneur et libère le contexte audio.
+ * @returns {void}
+ */
+function stopSampler() {
+  rs = null;
+  audio?.close().catch(() => {});
+  audio = null;
+}
+
+/**
+ * Signale un contexte audio suspendu : le navigateur attend un geste de l'utilisateur.
+ * @returns {void}
+ */
+function showAudioState() {
+  if (audio?.state === 'suspended') journal('son suspendu par le navigateur : cliquer dans la page (ou lancer Chrome avec --autoplay-policy=no-user-gesture-required)', true);
+}
+
+/**
+ * Relance le contexte audio s'il est suspendu (à appeler sur un geste de l'utilisateur).
+ * @returns {void}
+ */
+function resumeAudio() {
+  if (audio?.state === 'suspended') audio.resume().catch(() => {});
+}
+document.addEventListener('pointerdown', resumeAudio, { capture: true });
+document.addEventListener('keydown', resumeAudio, { capture: true });
+
+$('rs-actif').addEventListener('change', (e) => {
+  const on = /** @type {HTMLInputElement} */ (e.target).checked;
+  save('rs-actif', on ? '1' : '');
+  journal(`échantillonneur intégré : ${on ? 'activé' : 'désactivé'}`);
+  if (on) startSampler(); else { stopSampler(); rsStatus('Désactivé.'); }
+});
+
+$('rs-sf2').addEventListener('change', async (e) => {
+  const file = /** @type {HTMLInputElement} */ (e.target).files?.[0];
+  if (!file) return;
+  await storeSoundFont(await file.arrayBuffer(), file.name);
+  journal(`SoundFont choisi : ${file.name}`);
+  if (/** @type {HTMLInputElement} */ ($('rs-actif')).checked) startSampler();
+  else rsStatus(`${file.name} gardé. Cocher l'échantillonneur intégré pour l'utiliser.`);
+});
+
+/**
+ * Prépare l'échantillonneur au chargement : SoundFont donné par `?sf2=<adresse>` (gardé dans le
+ * cache), puis démarrage si l'échantillonneur était activé (ou si `?sf2` est donné).
+ * @returns {Promise<void>}
+ */
+async function initSampler() {
+  const url = new URLSearchParams(location.search).get('sf2');
+  if (url) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url} : ${r.status}`);
+      await storeSoundFont(await r.arrayBuffer(), url.split('/').pop() ?? url);
+      save('rs-actif', '1');
+    } catch (e) { journal(`SoundFont ?sf2 introuvable : ${e.message}`, true); }
+  }
+  const on = load('rs-actif') === '1';
+  /** @type {HTMLInputElement} */ ($('rs-actif')).checked = on;
+  if (on) await startSampler();
+}
+const samplerReady = initSampler();
 
 /**
  * Remplit les deux listes de sorties et rétablit les choix mémorisés.
@@ -185,13 +320,18 @@ const ticker = startTicker(() => { lastBeat = performance.now(); player.tick(); 
 /**
  * Diagnostic lu par le superviseur (scripts/superviseur.js), par le protocole DevTools de Chrome,
  * pour décider si la page joue vraiment ou s'il faut basculer sur l'exécuteur headless.
- * @returns {{etat: string, envoyes: number, sortiesMidi: Array<number>, webMidi: boolean, battementMs: number, sequence: string|null, version: string}}
+ * `echantillonneur` : null s'il n'est pas activé, « en marche » s'il est prêt et que le son sort,
+ * sinon l'état du contexte audio (« suspended » : le navigateur attend un geste). `niveau` : crête
+ * de sa sortie sur le dernier dixième de seconde.
+ * @returns {{etat: string, envoyes: number, sortiesMidi: Array<number>, webMidi: boolean, echantillonneur: string|null, niveau: number|null, battementMs: number, sequence: string|null, version: string}}
  */
 window.animotsDiagnostic = () => ({
   etat: player.state,
   envoyes: player.sent,
   sortiesMidi: midi ? midi.ports() : [],
   webMidi: midi !== null,
+  echantillonneur: !audio ? null : rs && audio.state === 'running' ? 'en marche' : audio.state,
+  niveau: rs ? Number(rs.level().toFixed(4)) : null,
   battementMs: Math.round(performance.now() - lastBeat),
   sequence: player.current()?.score.label ?? null,
   version: $('version').textContent ?? '',
@@ -260,7 +400,7 @@ if ('serviceWorker' in navigator && (!isLocal || new URLSearchParams(location.se
 const params = new URLSearchParams(location.search);
 if (params.has('demarrer')) {
   if (params.get('graine')) /** @type {HTMLInputElement} */ ($('graine')).value = params.get('graine') ?? '';
-  midiReady.then(() => {
+  Promise.all([midiReady, samplerReady]).then(() => {
     journal('démarrage automatique (?demarrer)');
     startInstallation();
   });

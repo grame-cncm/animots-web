@@ -102,6 +102,34 @@ Sans sortie choisie, la lecture est simulée : rien ne sonne, mais l'écran mont
 - **Arrêt.** L'ordonnanceur envoie un note-off pour chaque note active, puis CC123 et CC120 sur tous les canaux, deux fois : tout de suite, puis après la fenêtre d'anticipation, pour couper aussi les notes déjà programmées.
 - **Essais.** Ils remplacent ce qui joue et s'arrêtent à leur fin. En 2013, le bouton remplaçait la partie, mais la minuterie de la partie suivante restait armée.
 
+### Prototype : l'échantillonneur intégré (RustySynth), à la place de Kontakt
+
+Branche `rustysynth`. La page peut jouer elle-même un SoundFont (`.sf2`), sans MIDI ni Kontakt. Le moteur est RustySynth, compilé en WebAssembly et joué dans un AudioWorklet (`output/rustysynth/`, copié de la branche `wasm` du clone de rustysynth). Dans le panneau Sortie, cocher **Échantillonneur intégré** et choisir un SoundFont. Le fichier reste dans le cache du navigateur, ce qui permet au démarrage automatique de le retrouver. `ui/?sf2=<adresse>` donne le SoundFont par une adresse sur le même site, et active l'échantillonneur.
+
+La sortie `output/rustysynth.js` reprend la correspondance du multi Kontakt :
+
+- une instance par enceinte : port p, canal c → instance c, canal MIDI p ;
+- le CC9 de valeur v (groupe P1 à P6) devient le *program change* v − 1 ;
+- elle règle l'étendue du pitch-bend à 7 demi-tons, celle de CLCE ;
+- elle ignore le port C.
+
+L'instance n sort sur la voie n de la carte son. Si la carte a moins de 16 voies, les enceintes sont repliées en stéréo, et le journal le signale. Arrêter vide aussi la file du worklet.
+
+Le diagnostic (`animotsDiagnostic`) ajoute deux champs : `echantillonneur` (« en marche », ou l'état du contexte audio) et `niveau`. Le superviseur accepte une page dont l'échantillonneur est en marche, même sans sortie MIDI. Il refuse une page dont l'échantillonneur est suspendu : le navigateur attend alors un geste. En kiosque, il faudra lancer Chrome avec `--autoplay-policy=no-user-gesture-required`, ce qui n'est pas encore fait dans `deploy/web-kiosk.sh`.
+
+**Essayé** dans Chromium, sur une sortie stéréo, avec un SF2 de test (14 presets) :
+
+- le SoundFont est chargé, puis retrouvé dans le cache après un rechargement ;
+- Cercle1 sonne : la crête de sortie atteint 0,084 dès la première note ;
+- Arrêter rend le silence en moins de 200 ms, et rien ne rejoue après la fenêtre d'anticipation.
+
+**Pas encore essayé :**
+
+- le SF2 du multi Gerland, dont la conversion par ConvertWithMoss est en cours ;
+- une carte à 16 voies ;
+- l'exécuteur Node, avec node-web-audio-api ;
+- l'endurance.
+
 ## Exploitation sans navigateur : l'exécuteur headless (phase 6)
 
 L'exécuteur joue l'installation sous Node.js, sans interface. C'est la forme prévue pour une installation qui tourne en continu. Il reprend le noyau, les séquences, `g-parties` et l'ordonnanceur du lecteur web, avec une sortie MIDI native (`@julusian/midi`, CoreMIDI).
@@ -284,6 +312,8 @@ output/
   player.js               ordonnanceur : anticipation, enchaînement des parties, notes actives, arrêt
   webmidi.js              sortie Web MIDI (ports A et B reliés à des sorties du système)
   simulated.js            sortie simulée (aucun son, sert à l'affichage et aux essais)
+  rustysynth.js           sortie vers l'échantillonneur intégré (prototype, branche rustysynth)
+  rustysynth/             worklet et module WebAssembly de RustySynth (copiés, ne pas modifier ici)
   ticker.js, ticker-worker.js  battement de l'ordonnanceur (Worker, ou setInterval en repli)
   smf.js                  export en fichier MIDI standard, et relecture pour vérification
 ui/
