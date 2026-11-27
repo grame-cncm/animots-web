@@ -108,25 +108,51 @@ Branche `rustysynth`. La page peut jouer elle-même un SoundFont (`.sf2`), sans 
 
 La sortie `output/rustysynth.js` reprend la correspondance du multi Kontakt :
 
-- une instance par enceinte : port p, canal c → instance c, canal MIDI p ;
+- une instance par enceinte : port p, canal c → instance c, canal MIDI p. Au démarrage, elle choisit sur ce canal la banque de l'instrument : 0 à 15 pour A1 à A16, 16 à 31 pour B1 à B16 ;
 - le CC9 de valeur v (groupe P1 à P6) devient le *program change* v − 1 ;
-- elle règle l'étendue du pitch-bend à 7 demi-tons, celle de CLCE ;
+- avec chaque CC9, elle règle l'étendue du pitch-bend du groupe : ±7 demi-tons pour P5 et P6, ±2 ailleurs, comme dans le multi. CLCE calcule toujours le pitch-bend pour 7 demi-tons : en 2013, une hauteur fractionnaire jouée dans P1 à P4 sonnait donc réduite aux 2/7, et la sortie le reproduit ;
+- elle applique le gain de sortie noté dans le SoundFont (voir plus bas) ;
 - elle ignore le port C.
+
+#### Le SoundFont du multi
+
+ConvertWithMoss convertit le multi `MultiGerland2013-16sorties-levels.nkm` en 32 SF2, un par instrument. Chacun pèse 100 Mo, avec les mêmes échantillons, et son unique preset superpose les groupes : la sélection du groupe par le CC9 est perdue. `scripts/soundfont.js` les fusionne en un seul fichier :
+
+```bash
+node scripts/soundfont.js <dossier des ProgXn.sf2> gerland.sf2
+```
+
+Le fichier produit garde :
+
+- les échantillons une seule fois (101,6 Mo au lieu de 3 Go) ;
+- un instrument SF2 par groupe et par jeu de niveaux (10 jeux distincts pour les 32 instruments) ;
+- 192 presets : en banque, l'instrument du multi ; en programme, le groupe. P4, dont tous les échantillons manquent, joue un instrument muet. RustySynth refuse un preset sans zone, et un programme absent ferait jouer un autre groupe.
+
+RustySynth n'applique que 40 % de l'atténuation SF2, et il ne dépasse pas 0 dB de gain. Le script écrit donc 2,5 fois l'atténuation voulue, puis décale toutes les valeurs pour que la plus petite soit nulle. Il note dans le commentaire du fichier le gain à rendre (`animots-gain-db=6.28` pour le multi), et la sortie l'applique au volume général. Une variante d'échantillon de Kontakt ne diffère que par sa boucle (`A_ 14` : 14 trames). Le script la recale par les décalages de boucle de la zone. Le SoundFont n'est pas dans le dépôt : il se fabrique à partir de la conversion.
+
+**Échantillons manquants.** Le multi en référence 753, et 299 sont introuvables sur cette machine. Toute la couche P4 est perdue (Voix et Cecilia2), ainsi que les voix de P5, les sons Rivière et la moitié du Guiro de P1. Les essais Cercle1 (touche 69) et Tutti (touche 48) jouent justement des touches perdues de P1 : ils restent muets tant que ces fichiers n'ont pas été retrouvés.
 
 L'instance n sort sur la voie n de la carte son. Si la carte a moins de 16 voies, les enceintes sont repliées en stéréo, et le journal le signale. Arrêter vide aussi la file du worklet.
 
 Le diagnostic (`animotsDiagnostic`) ajoute deux champs : `echantillonneur` (« en marche », ou l'état du contexte audio) et `niveau`. Le superviseur accepte une page dont l'échantillonneur est en marche, même sans sortie MIDI. Il refuse une page dont l'échantillonneur est suspendu : le navigateur attend alors un geste. En kiosque, il faudra lancer Chrome avec `--autoplay-policy=no-user-gesture-required`, ce qui n'est pas encore fait dans `deploy/web-kiosk.sh`.
 
-**Essayé** dans Chromium, sur une sortie stéréo, avec un SF2 de test (14 presets) :
+**Essayé** dans Chromium, sur une sortie stéréo :
 
-- le SoundFont est chargé, puis retrouvé dans le cache après un rechargement ;
-- Cercle1 sonne : la crête de sortie atteint 0,084 dès la première note ;
-- Arrêter rend le silence en moins de 200 ms, et rien ne rejoue après la fenêtre d'anticipation.
+- avec un SF2 de test (14 presets) :
+  - le SoundFont est chargé, puis retrouvé dans le cache après un rechargement ;
+  - Cercle1 sonne : la crête de sortie atteint 0,084 dès la première note ;
+  - Arrêter rend le silence en moins de 200 ms, et rien ne rejoue après la fenêtre d'anticipation ;
+- avec le SoundFont du multi (192 presets), graine 2013 :
+  - la séquence 1 garde ses 25 s de silence ;
+  - la séquence 29 sonne ;
+  - la console ne montre aucune erreur.
+
+Les tests (`tests/soundfont.test.js`) font jouer à RustySynth un SoundFont fusionné. Banques et programmes répondent, P4 reste muet, et les écarts de niveau sont rendus à 0,3 dB près, gains positifs compris.
 
 **Pas encore essayé :**
 
-- le SF2 du multi Gerland, dont la conversion par ConvertWithMoss est en cours ;
 - une carte à 16 voies ;
+- l'écoute du résultat, comparée à Kontakt ;
 - l'exécuteur Node, avec node-web-audio-api ;
 - l'endurance.
 
@@ -323,6 +349,7 @@ scripts/
   transpile.js            régénère les séquences depuis source/ (--check : vérifie seulement)
   serve.js                serveur local de la page (127.0.0.1, port 8080 par défaut ; un dossier en option)
   build-pages.js          construit le site Pages : main à la racine, chaque étiquette vX.Y figée, service workers
+  soundfont.js            fusionne les 32 SF2 de ConvertWithMoss en un SoundFont pour l'échantillonneur intégré (prototype)
   headless.js             exécuteur sans navigateur (npm run headless)
   superviseur.js          essaie la page web dans Chrome, bascule sur l'exécuteur si elle ne joue pas
 deploy/

@@ -8,14 +8,22 @@
  *
  * ## Correspondance avec le multi Kontakt
  *
+ * Le SoundFont attendu est celui que fabrique `scripts/soundfont.js` à partir du multi : banque
+ * 0 à 15 pour A1 à A16, 16 à 31 pour B1 à B16, programme n − 1 pour le groupe Pn.
+ *
  * - **Une instance RustySynth par enceinte.** Un message du port p, canal c, va à l'instance c,
- *   sur son canal MIDI p : An et Bn sonnent sur l'enceinte n. L'instance n sort sur la voie n
- *   de la carte son (16 voies séparées), ou, si la carte en a moins, sur une paire stéréo.
- * - **CC9 → program change.** Le CC9 de valeur v (groupe P1 à P6) devient le programme v − 1 :
- *   le SF2 converti depuis le multi doit donc mettre le groupe Pn au preset n − 1.
- * - **Pitch-bend.** CLCE porte les hauteurs fractionnaires par un pitch-bend d'étendue
- *   `BEND_RANGE` (7 demi-tons) ; RustySynth part de 2. La sortie règle donc le RPN 0 de chaque
- *   canal au démarrage (`initMessages`).
+ *   sur son canal MIDI p : An et Bn sonnent sur l'enceinte n. Au démarrage, la sortie choisit sur
+ *   ce canal la banque de l'instrument (`initMessages`). L'instance n sort sur la voie n de la
+ *   carte son (16 voies séparées), ou, si la carte en a moins, sur une paire stéréo.
+ * - **CC9 → program change.** Le CC9 de valeur v (groupe P1 à P6) devient le programme v − 1.
+ * - **Pitch-bend.** Dans le multi, l'étendue dépend du groupe : ±7 demi-tons pour P5 et P6,
+ *   ±2 pour les autres (`GROUP_BEND_RANGE`). CLCE, lui, calcule toujours le pitch-bend des
+ *   hauteurs fractionnaires pour 7 demi-tons (`BEND_RANGE`) : en 2013, une fraction jouée dans P1
+ *   à P4 sonnait donc réduite aux 2/7. La sortie reproduit ce comportement : avec chaque CC9, elle
+ *   règle l'étendue (RPN 0) du groupe choisi. RustySynth ne lit pas les modulateurs SF2, où
+ *   ConvertWithMoss avait noté ces étendues.
+ * - **Niveau.** `scripts/soundfont.js` décale les atténuations et note dans le commentaire du
+ *   fichier le gain à rendre (`animots-gain-db=…`). La sortie l'applique au volume général.
  * - **Ports au-delà de B** (le port C de la séquence 21) : ignorés, comme dans le multi de 2013.
  *
  * ## Heure
@@ -26,8 +34,6 @@
  * RustySynth près (32 trames, 0,7 ms à 48 kHz).
  */
 
-import { BEND_RANGE } from '../core/score.js';
-
 /** Nombre d'instances : une par enceinte. */
 export const INSTANCES = 16;
 
@@ -35,31 +41,64 @@ export const INSTANCES = 16;
 export const PORTS = [0, 1];
 
 /**
- * Traduit un message de la partition pour l'échantillonneur.
- * @param {number} port Port de la partition (0 = A, 1 = B...).
- * @param {Array<number>} data Octets du message (statut, données).
- * @returns {{instance: number, data: Array<number>} | null} Instance et message, ou null si le
- *   port n'est pas joué.
+ * Étendue du pitch-bend (demi-tons) de chaque groupe du multi, indicée par le numéro du groupe
+ * (1 à 6) : ±699 et ±702 cents pour P5 et P6, l'étendue par défaut de Kontakt (±2) ailleurs.
  */
-export function route(port, data) {
-  if (!PORTS.includes(port)) return null;
-  const command = data[0] & 0xf0, instance = data[0] & 0x0f;
-  if (command === 0xb0 && data[1] === 9) return { instance, data: [0xc0 | port, Math.max(0, (data[2] ?? 1) - 1), 0] };
-  return { instance, data: [command | port, data[1] ?? 0, data[2] ?? 0] };
+export const GROUP_BEND_RANGE = [2, 2, 2, 2, 2, 7, 7];
+
+/**
+ * Messages qui règlent l'étendue du pitch-bend (RPN 0) d'un canal, puis RPN nul pour qu'un data
+ * entry ultérieur ne la modifie pas.
+ * @param {number} channel Canal MIDI (0 à 15).
+ * @param {number} semitones
+ * @returns {Array<Array<number>>}
+ */
+export function bendRange(channel, semitones) {
+  const cc = 0xb0 | channel;
+  return [[cc, 101, 0], [cc, 100, 0], [cc, 6, semitones], [cc, 38, 0], [cc, 101, 127], [cc, 100, 127]];
 }
 
 /**
- * Messages qui préparent une instance : étendue du pitch-bend (RPN 0) sur le canal de chaque port,
- * puis RPN nul pour qu'un data entry ultérieur ne la modifie pas.
- * @param {number} [range=BEND_RANGE] Étendue en demi-tons.
+ * Traduit un message de la partition pour l'échantillonneur.
+ * @param {number} port Port de la partition (0 = A, 1 = B...).
+ * @param {Array<number>} data Octets du message (statut, données).
+ * @returns {Array<{instance: number, data: Array<number>}>} Messages pour une instance (aucun si
+ *   le port n'est pas joué).
+ */
+export function route(port, data) {
+  if (!PORTS.includes(port)) return [];
+  const command = data[0] & 0xf0, instance = data[0] & 0x0f;
+  if (command === 0xb0 && data[1] === 9) {
+    const group = Math.min(6, Math.max(1, data[2] ?? 1));
+    return [[0xc0 | port, group - 1, 0], ...bendRange(port, GROUP_BEND_RANGE[group])].map((d) => ({ instance, data: d }));
+  }
+  return [{ instance, data: [command | port, data[1] ?? 0, data[2] ?? 0] }];
+}
+
+/**
+ * Messages qui préparent une instance : sur le canal de chaque port, la banque de l'instrument du
+ * multi (0 à 15 pour A1 à A16, 16 à 31 pour B1 à B16), le groupe P1 et son étendue de pitch-bend.
+ * @param {number} instance Instance (enceinte) de 0 à 15.
  * @returns {Array<Array<number>>}
  */
-export function initMessages(range = BEND_RANGE) {
-  return PORTS.flatMap((p) => [
-    [0xb0 | p, 101, 0], [0xb0 | p, 100, 0], [0xb0 | p, 6, range], [0xb0 | p, 38, 0],
-    [0xb0 | p, 101, 127], [0xb0 | p, 100, 127],
-  ]);
+export function initMessages(instance) {
+  return PORTS.flatMap((p) => [[0xb0 | p, 0, p * 16 + instance], [0xc0 | p, 0, 0], ...bendRange(p, GROUP_BEND_RANGE[1])]);
 }
+
+/**
+ * Gain de sortie (dB) noté par `scripts/soundfont.js` dans le commentaire du SoundFont
+ * (`animots-gain-db=…`), 0 pour un autre SoundFont.
+ * @param {Uint8Array} bytes Contenu du fichier : seuls les premiers 64 Ko (bloc INFO) sont lus.
+ * @returns {number}
+ */
+export function soundFontGain(bytes) {
+  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 64 * 1024));
+  const m = /animots-gain-db=(-?[\d.]+)/.exec(head);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Volume général de RustySynth par défaut (`Synthesizer::master_volume`). */
+const DEFAULT_MASTER_VOLUME = 0.5;
 
 /**
  * Relie le nœud à la destination : une voie de la carte par instance si elle en a assez, sinon
@@ -119,9 +158,10 @@ export class RustySynthSink {
    * @param {typeof AudioWorkletNode} [o.AudioWorkletNode] Classe du nœud (globale par défaut).
    * @param {number} [o.blockSize=32] Bloc RustySynth : la résolution temporelle, en trames.
    * @param {number} [o.polyphony=64] Voix par instance.
-   * @returns {Promise<{sink: RustySynthSink, presets: number, separees: boolean, max: number}>}
+   * @returns {Promise<{sink: RustySynthSink, presets: number, separees: boolean, max: number, gainDb: number}>}
    */
   static async create(ctx, { sf2, wasm, processorUrl, AudioWorkletNode: Node = globalThis.AudioWorkletNode, blockSize = 32, polyphony = 64 }) {
+    const gainDb = soundFontGain(new Uint8Array(sf2)); // avant le transfert, qui vide le tampon
     await ctx.audioWorklet.addModule(processorUrl);
     const node = new Node(ctx, 'rustysynth', {
       numberOfInputs: 0,
@@ -140,10 +180,11 @@ export class RustySynthSink {
     const { separees, max } = connectOutput(ctx, node, INSTANCES);
     const sink = new RustySynthSink(node, (ms) => audioTime(ctx, ms));
     node.port.onmessage = (e) => { if (e.data.type === 'levels') sink.peaks = Array.from(e.data.peaks); };
+    node.port.postMessage({ type: 'volume', value: DEFAULT_MASTER_VOLUME * 10 ** (gainDb / 20) });
     for (let i = 0; i < INSTANCES; i++) {
-      for (const data of initMessages()) node.port.postMessage({ type: 'midi', time: 0, instance: i, data });
+      for (const data of initMessages(i)) node.port.postMessage({ type: 'midi', time: 0, instance: i, data });
     }
-    return { sink, presets, separees, max };
+    return { sink, presets, separees, max, gainDb };
   }
 
   /**
@@ -154,9 +195,10 @@ export class RustySynthSink {
    * @returns {void}
    */
   send(port, data, time) {
-    const r = route(port, data);
-    if (!r) { this.dropped++; return; }
-    this.node.port.postMessage({ type: 'midi', time: this.toAudioTime(time), instance: r.instance, data: r.data });
+    const out = route(port, data);
+    if (!out.length) { this.dropped++; return; }
+    const t = this.toAudioTime(time);
+    for (const r of out) this.node.port.postMessage({ type: 'midi', time: t, instance: r.instance, data: r.data });
   }
 
   /**
