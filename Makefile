@@ -7,12 +7,17 @@ RUSTYSYNTH := vendor/rustysynth
 GRAINES ?= 50
 PARTIES ?= 200
 HEURES ?= 24
+# essai réel de longue durée : durée (heures), journal, et sortie jouée (échantillonneur par défaut ;
+# pour Kontakt : SORTIE="--sortie-a 'IAC Bus 1' --sortie-b 'IAC Bus 2'")
+DUREE_H ?= 72
+JOURNAL ?= out/essai-long.log
+SORTIE ?= --echantillonneur $(SF2)
 CHROME ?= /Applications/Google Chrome.app
 # profil Chrome dédié : n'interfère ni avec le Chrome habituel ni avec le profil du kiosque
 PROFIL ?= $(HOME)/Library/Application Support/Animots/Chrome-web-auto
 
 .DEFAULT_GOAL := help
-.PHONY: help echantillonneur muet web web-auto rustysynth endurance endurance-audio
+.PHONY: help echantillonneur muet web web-auto rustysynth endurance endurance-audio essai-long rapport
 
 help: ## Affiche cette aide
 	@echo "Cibles :"
@@ -56,3 +61,10 @@ endurance: ## Vieillissement accéléré : GRAINES × PARTIES parties à travers
 
 endurance-audio: ## Endurance audio accélérée : HEURES heures rendues par RustySynth sans carte son (≈ 160 fois le temps réel)
 	node scripts/endurance-audio.js --sf2 $(SF2) --heures $(HEURES) --graine $(GRAINE)
+
+essai-long: ## Essai réel de longue durée (DUREE_H heures, 72 par défaut, son compris) : journal, battement et mesures dans out/
+	@mkdir -p out
+	node scripts/headless.js $(SORTIE) --journal $(JOURNAL) --battement out/battement-essai --mesures 10 --eveille --duree $(shell echo $$(( $(DUREE_H) * 3600 )))
+
+rapport: ## Bilan du journal d'un essai (JOURNAL=…, out/essai-long.log par défaut) : relances, mémoire, retard, alertes
+	node scripts/rapport.js $(JOURNAL)
