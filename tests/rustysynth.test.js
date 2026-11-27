@@ -5,7 +5,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { SOURCE, COPIE, header, withoutHeader } from '../scripts/rustysynth-copie.js';
 import { route, initMessages, bendRange, soundFontGain, audioTime, connectOutput, RustySynthSink, INSTANCES, PORTS, GROUP_BEND_RANGE } from '../output/rustysynth.js';
 
 /**
@@ -196,4 +199,25 @@ test('module WebAssembly livré : sans import, avec les exports attendus, et ref
   assert.equal(ex.rs_load_soundfont(), -1);
   const msg = new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ex.rs_error_ptr(), ex.rs_error_len()));
   assert.match(msg, /SoundFont/);
+});
+
+const sousModule = existsSync(SOURCE);
+
+test('copie du worklet : identique à celui du sous-module vendor/rustysynth, en-tête mis à part', { skip: !sousModule && 'sous-module vendor/rustysynth absent (git submodule update --init)' }, () => {
+  const copie = readFileSync(COPIE, 'utf8');
+  assert.match(copie, /^\/\*\*\n \* @file /);
+  assert.equal(withoutHeader(copie), readFileSync(SOURCE, 'utf8'), 'worklet copié différent : lancer make rustysynth');
+  const commit = execFileSync('git', ['-C', fileURLToPath(new URL('../vendor/rustysynth', import.meta.url)), 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+  assert.ok(copie.startsWith(header(commit)), `l'en-tête doit citer le commit du sous-module (${commit}) : lancer make rustysynth`);
+});
+
+test('licence copiée : identique à celle du sous-module', { skip: !sousModule && 'sous-module vendor/rustysynth absent' }, () => {
+  const licence = fileURLToPath(new URL('../output/rustysynth/LICENSE.txt', import.meta.url));
+  const source = fileURLToPath(new URL('../vendor/rustysynth/LICENSE.txt', import.meta.url));
+  assert.equal(readFileSync(licence, 'utf8'), readFileSync(source, 'utf8'));
+});
+
+test('header et withoutHeader : la tête retirée rend le texte d’origine', () => {
+  const original = '// AudioWorkletProcessor\nclass X {}\n';
+  assert.equal(withoutHeader(header('abc1234') + original), original);
 });

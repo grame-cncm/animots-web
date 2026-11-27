@@ -1,0 +1,4 @@
+[submodule "vendor/rustysynth"]
+	path = vendor/rustysynth
+	url = https://github.com/sletz/rustysynth.git
+	branch = wasm

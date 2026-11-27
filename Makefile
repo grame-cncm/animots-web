@@ -3,12 +3,13 @@
 SF2 ?= ../conversion-multi/gerland.sf2
 GRAINE ?= 2013
 PORT ?= 8080
+RUSTYSYNTH := vendor/rustysynth
 CHROME ?= /Applications/Google Chrome.app
 # profil Chrome dédié : n'interfère ni avec le Chrome habituel ni avec le profil du kiosque
 PROFIL ?= $(HOME)/Library/Application Support/Animots/Chrome-web-auto
 
 .DEFAULT_GOAL := help
-.PHONY: help echantillonneur muet web web-auto
+.PHONY: help echantillonneur muet web web-auto rustysynth
 
 help: ## Affiche cette aide
 	@echo "Cibles :"
@@ -39,3 +40,10 @@ web-auto: ## Serveur local + Chrome qui charge le SoundFont SF2 et démarre seul
 	  --autoplay-policy=no-user-gesture-required --new-window \
 	  "http://localhost:$(PORT)/ui/?demarrer&sansmidi&graine=$(GRAINE)&sf2=../out/soundfont.sf2") &
 	node scripts/serve.js $(PORT)
+
+rustysynth: ## Reconstruit le module WebAssembly depuis le sous-module vendor/rustysynth et le recopie dans output/rustysynth/
+	@test -f $(RUSTYSYNTH)/Cargo.toml || { echo "Sous-module absent : git submodule update --init"; exit 1; }
+	cd $(RUSTYSYNTH) && cargo build -p rustysynth_wasm --release --target wasm32-unknown-unknown
+	cp $(RUSTYSYNTH)/target/wasm32-unknown-unknown/release/rustysynth_wasm.wasm output/rustysynth/
+	cp $(RUSTYSYNTH)/LICENSE.txt output/rustysynth/LICENSE.txt
+	node scripts/rustysynth-copie.js
