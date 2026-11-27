@@ -60,6 +60,7 @@ test('evaluateHealth : l’échantillonneur intégré en marche remplace le MIDI
   assert.equal(h.ok, false);
   assert.match(h.raison, /échantillonneur intégré muet \(contexte audio « suspended »\)/);
   assert.match(evaluateHealth({ ...sansMidi, echantillonneur: null }).raison, /Web MIDI refusé/);
+  assert.match(evaluateHealth({ ...SAIN, echantillonneur: 'bloqué' }).raison, /échantillonneur intégré muet \(contexte audio « bloqué »\)/);
   assert.equal(evaluateHealth({ ...sansMidi, echantillonneur: 'en marche', battementMs: 9000 }).ok, false);
 });
 

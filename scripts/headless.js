@@ -37,6 +37,10 @@
  *
  * Arrêt propre sur SIGINT (Ctrl-C) ou SIGTERM (launchd) : coupe le son (note-off, CC123, CC120),
  * attend l'envoi des derniers messages, ferme les ports (ou le contexte audio).
+ *
+ * Avec l'échantillonneur, si le rendu audio ne renvoie plus de relevé de niveaux pendant 15 s
+ * (carte son disparue, fil audio arrêté), l'exécuteur le note dans le journal et s'arrête avec
+ * le code 1 : launchd (KeepAlive) le relance, alors que le battement, lui, aurait continué.
  */
 
 import { appendFileSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
@@ -206,6 +210,13 @@ export async function main(o) {
   const ticker = setInterval(() => player.tick(), 25);
   const heart = o.battement ? setInterval(() => writeFileSync(o.battement, `${new Date().toISOString()}\n`), 10000) : null;
   if (o.battement) writeFileSync(o.battement, `${new Date().toISOString()}\n`);
+  // échantillonneur : un rendu figé ne se voit ni dans la partition ni dans le battement
+  const surveillance = typeof sink.stalled === 'function' ? setInterval(() => {
+    if (!sink.stalled()) return;
+    log('ATTENTION : le rendu audio ne renvoie plus de niveaux depuis 15 s : arrêt pour relance');
+    process.exitCode = 1;
+    shutdown('rendu audio bloqué');
+  }, 5000) : null;
   const mesures = o.mesures > 0 ? setInterval(() => {
     const retard = typeof sink.maxLate === 'number' ? sink.maxLate : null;
     log(ligneMesures({ parties: partNo, depuis: Date.now() - debut, notesActives: player.active.size, retard }));
@@ -224,6 +235,7 @@ export async function main(o) {
     clearInterval(ticker);
     if (heart) clearInterval(heart);
     if (mesures) clearInterval(mesures);
+    if (surveillance) clearInterval(surveillance);
     setTimeout(async () => {
       await sink.close();
       const detail = [
@@ -265,7 +277,7 @@ export async function main(o) {
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
     await main(parseArgs(process.argv.slice(2)));
-    process.exit(0);
+    process.exit(process.exitCode ?? 0);
   } catch (e) {
     console.error(`animots : ${e.message}`);
     process.exit(1);

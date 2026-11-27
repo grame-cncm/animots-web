@@ -105,6 +105,8 @@ const sink = {
 let rs = null;
 /** @type {AudioContext | null} */
 let audio = null;
+/** Voies de la carte son au démarrage de l'échantillonneur (pour repérer un changement de carte). */
+let voiesCarte = 0;
 
 /** Cache du navigateur qui garde le SoundFont choisi, pour le démarrage automatique. */
 const SF2_CACHE = 'animots-soundfont';
@@ -156,6 +158,9 @@ async function startSampler() {
     const wasm = await fetch('../output/rustysynth/rustysynth_wasm.wasm').then((r) => r.arrayBuffer());
     const r = await RustySynthSink.create(audio, { sf2: sf.bytes, wasm, processorUrl: '../output/rustysynth/rustysynth-processor.js' });
     rs = r.sink;
+    voiesCarte = r.max;
+    // le navigateur peut effacer le cache quand l'espace manque : on lui demande de le garder
+    navigator.storage?.persist?.().then((ok) => { if (!ok) journal('le navigateur n’a pas accepté de garder le SoundFont en cache de façon persistante', true); }).catch(() => {});
     const voies = r.separees ? `16 voies séparées (la carte en a ${r.max})` : `carte à ${r.max} voies : les 16 enceintes sont repliées en stéréo`;
     rsStatus(`${name} : ${r.presets} presets, ${audio.sampleRate} Hz, ${voies}.`);
     journal(`échantillonneur prêt : ${name}, ${r.presets} presets, ${voies}`, !r.separees);
@@ -195,6 +200,28 @@ function resumeAudio() {
 }
 document.addEventListener('pointerdown', resumeAudio, { capture: true });
 document.addEventListener('keydown', resumeAudio, { capture: true });
+
+
+// Robustesse pour une installation qui tourne des jours : toutes les 5 s, un contexte suspendu
+// est relancé (réveil de la machine, carte son revenue ; en kiosque, l'autoplay le permet), et un
+// rendu figé (plus de relevé de niveaux) redémarre l'échantillonneur.
+setInterval(() => {
+  if (!audio || audio.state === 'closed') return;
+  if (audio.state !== 'running') { audio.resume().catch(() => {}); return; }
+  if (rs?.stalled()) {
+    journal('le rendu audio ne renvoie plus de niveaux depuis 15 s : redémarrage de l’échantillonneur', true);
+    startSampler();
+  }
+}, 5000);
+
+// Une carte son branchée ou débranchée change le nombre de voies : l'échantillonneur redémarre
+// pour router à nouveau ses 16 voies (séparées, ou repliées en stéréo).
+navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+  if (!audio || !rs) return;
+  const voies = audio.destination.maxChannelCount;
+  journal(`périphériques audio modifiés : la sortie a maintenant ${voies} voies`);
+  if (voies !== voiesCarte) startSampler();
+});
 
 $('rs-actif').addEventListener('change', (e) => {
   const on = /** @type {HTMLInputElement} */ (e.target).checked;
@@ -330,6 +357,7 @@ const ticker = startTicker(() => { lastBeat = performance.now(); player.tick(); 
  * Diagnostic lu par le superviseur (scripts/superviseur.js), par le protocole DevTools de Chrome,
  * pour décider si la page joue vraiment ou s'il faut basculer sur l'exécuteur headless.
  * `echantillonneur` : null s'il n'est pas activé, « en marche » s'il est prêt et que le son sort,
+ * « bloqué » si le rendu audio ne renvoie plus de niveaux depuis 15 s,
  * sinon l'état du contexte audio (« suspended » : le navigateur attend un geste). `niveau` : crête
  * de sa sortie sur le dernier dixième de seconde.
  * @returns {{etat: string, envoyes: number, sortiesMidi: Array<number>, webMidi: boolean, echantillonneur: string|null, niveau: number|null, battementMs: number, sequence: string|null, version: string}}
@@ -339,7 +367,7 @@ window.animotsDiagnostic = () => ({
   envoyes: player.sent,
   sortiesMidi: midi ? midi.ports() : [],
   webMidi: midi !== null,
-  echantillonneur: !audio ? null : rs && audio.state === 'running' ? 'en marche' : audio.state,
+  echantillonneur: !audio ? null : rs && audio.state === 'running' ? (rs.stalled() ? 'bloqué' : 'en marche') : audio.state,
   niveau: rs ? Number(rs.level().toFixed(4)) : null,
   battementMs: Math.round(performance.now() - lastBeat),
   sequence: player.current()?.score.label ?? null,

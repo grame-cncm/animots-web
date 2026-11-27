@@ -86,6 +86,11 @@ export async function openRustySynthNode({ soundFont, carte = null, muet = false
       AudioWorkletNode: wa.AudioWorkletNode,
     });
     await ctx.resume();
+    let fermeture = false;
+    // un contexte suspendu (changement de périphérique, réveil de la machine) est relancé
+    ctx.addEventListener?.('statechange', () => {
+      if (ctx.state === 'suspended' && !fermeture) ctx.resume().catch(() => {});
+    });
     return Object.assign(r.sink, {
       names: ['échantillonneur', 'échantillonneur'],
       carte: carteNom,
@@ -97,7 +102,7 @@ export async function openRustySynthNode({ soundFont, carte = null, muet = false
        * Ferme le contexte audio (à l'arrêt, après la coupure du son).
        * @returns {Promise<void>}
        */
-      async close() { await ctx.close(); },
+      async close() { fermeture = true; await ctx.close(); },
     });
   } catch (e) {
     await ctx.close().catch(() => {});

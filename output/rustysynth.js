@@ -144,7 +144,19 @@ export class RustySynthSink {
     this.peaks = new Array(INSTANCES).fill(0);
     /** Crête la plus forte relevée depuis la création de la sortie. */
     this.maxLevel = 0;
+    /** Heure `performance.now()` du dernier relevé de niveaux : le worklet en envoie dix par seconde. */
+    this.lastLevels = performance.now();
   }
+
+  /**
+   * Le rendu audio est-il bloqué ? Le worklet envoie un relevé de niveaux environ dix fois par
+   * seconde tant que le contexte audio tourne ; sans relevé depuis `limite`, le rendu est figé
+   * (carte son disparue, fil audio arrêté), même si la partition continue d'être envoyée.
+   * @param {number} [now] Heure `performance.now()`.
+   * @param {number} [limite=15000] Silence admis (ms).
+   * @returns {boolean}
+   */
+  stalled(now = performance.now(), limite = 15000) { return now - this.lastLevels > limite; }
 
   /**
    * Crête la plus forte des 16 instances (0 : silence), d'après le dernier relevé du worklet.
@@ -158,6 +170,7 @@ export class RustySynthSink {
    * @returns {void}
    */
   setPeaks(peaks) {
+    this.lastLevels = performance.now();
     this.peaks = Array.from(peaks);
     this.maxLevel = Math.max(this.maxLevel, this.level());
   }

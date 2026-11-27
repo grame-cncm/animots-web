@@ -221,3 +221,14 @@ test('header et withoutHeader : la tête retirée rend le texte d’origine', ()
   const original = '// AudioWorkletProcessor\nclass X {}\n';
   assert.equal(withoutHeader(header('abc1234') + original), original);
 });
+
+test('RustySynthSink.stalled : bloqué sans relevé de niveaux depuis 15 s', () => {
+  const sink = new RustySynthSink({ port: { postMessage() {} } }, (ms) => ms / 1000);
+  const t = sink.lastLevels;
+  assert.equal(sink.stalled(t + 14000), false);
+  assert.equal(sink.stalled(t + 16000), true);
+  sink.setPeaks(new Array(16).fill(0));
+  assert.ok(sink.lastLevels >= t);
+  assert.equal(sink.stalled(sink.lastLevels + 1000), false);
+  assert.equal(sink.stalled(sink.lastLevels + 3000, 2000), true);
+});
