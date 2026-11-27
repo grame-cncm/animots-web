@@ -27,7 +27,7 @@
  *
  *     node scripts/superviseur.js [options]
  *
- * - `--url URL` : page à ouvrir (par défaut la version figée v1.3, `?demarrer`) ;
+ * - `--url URL` : page à ouvrir (par défaut la version figée v1.4, `?demarrer`) ;
  * - `--sortie-a NOM`, `--sortie-b NOM` : sorties de l'exécuteur headless en cas de bascule ;
  *   donner les mêmes que dans la page (les bus IAC), pour que Kontakt reçoive au même endroit ;
  * - `--journal FICHIER`, `--battement FICHIER`, `--eveille` : comme scripts/headless.js ;
@@ -48,7 +48,7 @@ const HEADLESS = fileURLToPath(new URL('./headless.js', import.meta.url));
 
 /** Valeurs par défaut des options. */
 export const DEFAULTS = Object.freeze({
-  url: 'https://grame-cncm.github.io/animots-web/v1.3/ui/?demarrer',
+  url: 'https://grame-cncm.github.io/animots-web/v1.4/ui/?demarrer',
   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   profil: join(homedir(), 'Library/Application Support/Animots/Chrome'),
   portDebogage: 9333,
