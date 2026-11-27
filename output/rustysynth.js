@@ -223,7 +223,9 @@ export class RustySynthSink {
  * @returns {number}
  */
 export function audioTime(ctx, ms, now = () => performance.now()) {
-  const ts = ctx.getOutputTimestamp?.();
+  let ts = null;
+  // node-web-audio-api déclare getOutputTimestamp, mais lève « not yet implemented »
+  try { ts = ctx.getOutputTimestamp?.() ?? null; } catch { ts = null; }
   if (ts && ts.performanceTime > 0) return (ts.contextTime ?? 0) + (ms - ts.performanceTime) / 1000;
   return ctx.currentTime + (ms - now()) / 1000;
 }

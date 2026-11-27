@@ -66,6 +66,9 @@ test('audioTime : relie performance.now() à l’heure du contexte par le son qu
   const suspendu = { currentTime: 2, getOutputTimestamp: () => ({ contextTime: 0, performanceTime: 0 }) };
   assert.equal(audioTime(suspendu, 1500, () => 1000), 2.5);
   assert.equal(audioTime({ currentTime: 2 }, 1500, () => 1000), 2.5);
+  // node-web-audio-api : getOutputTimestamp existe mais lève une exception
+  const node = { currentTime: 2, getOutputTimestamp() { throw new Error('not yet implemented'); } };
+  assert.equal(audioTime(node, 1500, () => 1000), 2.5);
 });
 
 /**
