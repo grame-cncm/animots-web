@@ -1,6 +1,6 @@
 /**
  * @file AudioWorkletProcessor de RustySynth (WebAssembly), copié tel quel du sous-module
- * vendor/rustysynth (https://github.com/sletz/rustysynth, branche wasm, commit 3cb4a02),
+ * vendor/rustysynth (https://github.com/sletz/rustysynth, branche wasm, commit 066d4f5),
  * fichier rustysynth_wasm/web/rustysynth-processor.js, avec rustysynth_wasm.wasm et LICENSE.txt.
  * Ne pas modifier ici : modifier là-bas, puis `make rustysynth`. Utilisé par output/rustysynth.js.
  */

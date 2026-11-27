@@ -135,7 +135,7 @@ git submodule update --init      # une fois, après un clonage
 make rustysynth                  # Rust et la cible wasm32-unknown-unknown (rustup target add wasm32-unknown-unknown)
 ```
 
-Construit depuis le commit `3cb4a02`, le module est identique à l'octet près au fichier livré. Quand le sous-module est présent, `tests/rustysynth.test.js` vérifie que le worklet et la licence copiés sont ceux du sous-module.
+Construit depuis le commit `066d4f5`, le module est identique à l'octet près au fichier livré. Quand le sous-module est présent, `tests/rustysynth.test.js` vérifie que le worklet et la licence copiés sont ceux du sous-module.
 
 La sortie `output/rustysynth.js` reprend la correspondance du multi Kontakt :
 
