@@ -11,7 +11,7 @@ Lecteur en ligne (Chrome ou Edge, pour le MIDI) :
 
 Après une première visite, les deux restent jouables hors ligne.
 
-Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2013) : le langage de composition CLCE/Prorythme et les 36 séquences de `Gerland2013-4.lsp`, avec une sortie MIDI vers Kontakt 8. L'analyse de faisabilité et le plan complet sont dans un document tenu hors de ce dépôt (`Animots-Gerland-JS-analyse-et-plan.md`).
+Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2013) : le langage de composition CLCE/Prorythme et les 36 séquences de `Gerland2013-4.lsp`, avec une sortie MIDI vers Kontakt 8, ou un échantillonneur intégré (RustySynth en WebAssembly, prototype). L'analyse de faisabilité et le plan complet sont dans un document tenu hors de ce dépôt (`Animots-Gerland-JS-analyse-et-plan.md`). Les consignes pour les agents de programmation sont dans [AGENTS.md](AGENTS.md).
 
 ## État
 
@@ -22,7 +22,10 @@ Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2
 | 3 | Transpileur, 36 séquences et 6 essais générés, enchaînement des parties | **fait** |
 | 4 | Validation contre le Lisp d'origine exécuté dans SBCL | **fait** : 1 456 072 notes identiques, sauf la séquence 29 (flottants, ≤ 3,6 ms) |
 | 5 | Lecteur Web MIDI et interface | **fait** ; essayé en sortie simulée, pas encore avec Kontakt |
-| 6 | Exploitation continue : exécuteur Node headless, launchd, chien de garde | **exécuteur fait** (206 tests en tout) ; test d'endurance de 72 h et essai avec Kontakt à faire |
+| 6 | Exploitation continue : exécuteur Node headless, launchd, chien de garde | **exécuteur fait** ; test d'endurance de 72 h et essai avec Kontakt à faire |
+| — | Échantillonneur intégré (RustySynth), à la place de Kontakt | **prototype** : page et exécuteur, SoundFont du multi ; 299 échantillons du multi introuvables, pas encore essayé sur une carte 16 voies |
+
+La suite compte 248 tests (`npm test`).
 
 ## Lancer les tests
 
@@ -374,6 +377,8 @@ Trois vérifications portent sur la traduction elle-même :
 ## Organisation
 
 ```text
+AGENTS.md                 consignes pour les agents de programmation
+Makefile                  raccourcis : make help, web, web-auto, echantillonneur, muet, rustysynth
 core/                     noyau sans DOM : navigateur et Node
   lisp.js                 sémantique Common Lisp : round au pair, mod, elt, NIL, opérateurs variadiques
   random.js               aléa reproductible : random(n), seed, état mémorisable
