@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ScheduledSink } from '../output/node-midi.js';
-import { parseArgs } from '../scripts/headless.js';
+import { parseArgs, ligneMesures, demarragesPrecedents } from '../scripts/headless.js';
 import { writeSoundFont, mergeGerland } from '../scripts/soundfont.js';
 import { convertWithMossFile } from './soundfont-fixture.js';
 
@@ -76,8 +76,11 @@ test('parseArgs : options et erreurs', () => {
   assert.deepEqual(parseArgs(['--graine', '2013', '--sortie-a', 'IAC Bus 1', '--simule', '--duree', '5', '--eveille']), {
     graine: 2013, sortieA: 'IAC Bus 1', sortieB: null, simule: true, essai: null, duree: 5,
     journal: null, battement: null, eveille: true, liste: false,
-    echantillonneur: null, carte: null, muet: false, cartes: false,
+    echantillonneur: null, carte: null, muet: false, cartes: false, mesures: 10,
   });
+  assert.equal(parseArgs(['--mesures', '0']).mesures, 0);
+  assert.equal(parseArgs(['--mesures', '2.5']).mesures, 2.5);
+  assert.throws(() => parseArgs(['--mesures', 'x']), /--mesures/);
   assert.throws(() => parseArgs(['--inconnue']), /option inconnue/);
   assert.throws(() => parseArgs(['--graine']), /valeur manquante/);
   assert.throws(() => parseArgs(['--essai', 'rien']), /essai inconnu/);
@@ -149,4 +152,28 @@ test('option inconnue : message clair et code 1', () => {
   const r = spawnSync(process.execPath, [SCRIPT, '--nimporte'], { encoding: 'utf8' });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /animots : option inconnue : --nimporte/);
+});
+
+test('ligneMesures : mémoire, parties, notes actives, retard (absent pour une sortie qui ne le mesure pas)', () => {
+  const memoire = { rss: 52 * 1048576, heapUsed: 6.5 * 1048576 };
+  assert.equal(ligneMesures({ parties: 12, depuis: 5400000, notesActives: 3, retard: 2.25, memoire }),
+    'mesures : mémoire 52.0 Mo (tas 6.5 Mo), 12 parties calculées en 1.50 h, 3 notes actives, retard maximal 2.3 ms');
+  assert.doesNotMatch(ligneMesures({ parties: 0, depuis: 0, notesActives: 0, retard: null, memoire }), /retard/);
+});
+
+test('mesures et démarrages : lignes périodiques dans le journal, relance comptée', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'animots-'));
+  try {
+    const journal = join(dir, 'session.log');
+    assert.equal(demarragesPrecedents(journal), 0);
+    const lancer = () => spawnSync(process.execPath, [SCRIPT, '--simule', '--graine', '2013', '--duree', '2', '--mesures', '0.01', '--journal', journal], { encoding: 'utf8' });
+    assert.equal(lancer().status, 0);
+    assert.match(readFileSync(journal, 'utf8'), /mesures : mémoire [\d.]+ Mo \(tas [\d.]+ Mo\), \d+ parties calculées en [\d.]+ h, \d+ notes actives, retard maximal [\d.]+ ms/);
+    assert.equal(demarragesPrecedents(journal), 1);
+    assert.equal(lancer().status, 0);
+    assert.match(readFileSync(journal, 'utf8'), /démarrage, graine 2013 \(démarrage n° 2 de ce journal\)/);
+    assert.equal(demarragesPrecedents(journal), 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

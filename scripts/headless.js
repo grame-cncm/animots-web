@@ -30,13 +30,16 @@
  *   le chien de garde (deploy/watchdog.sh) relance l'exécuteur s'il n'est plus réécrit ;
  * - `--eveille` : empêche la mise en veille de la machine tant que l'exécuteur tourne (macOS,
  *   `caffeinate`) ;
+ * - `--mesures MIN` : écrit toutes les MIN minutes (10 par défaut, 0 pour aucune) une ligne de
+ *   mesures : mémoire, parties jouées, notes actives, retard maximal des messages MIDI depuis la
+ *   mesure précédente. `scripts/rapport.js` en tire les tendances d'un long essai ;
  * - `--liste` : affiche les sorties MIDI du système et s'arrête.
  *
  * Arrêt propre sur SIGINT (Ctrl-C) ou SIGTERM (launchd) : coupe le son (note-off, CC123, CC120),
  * attend l'envoi des derniers messages, ferme les ports (ou le contexte audio).
  */
 
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { realpathSync } from 'node:fs';
@@ -50,16 +53,17 @@ import { openRustySynthNode, listAudioOutputs } from '../output/rustysynth-node.
 /**
  * Lit les options de la ligne de commande (voir l'en-tête du fichier).
  * @param {Array<string>} argv Arguments après le nom du script.
- * @returns {{graine: number|null, sortieA: string|null, sortieB: string|null, simule: boolean, essai: string|null, duree: number|null, journal: string|null, battement: string|null, eveille: boolean, liste: boolean, echantillonneur: string|null, carte: string|null, muet: boolean, cartes: boolean}}
+ * @returns {{graine: number|null, sortieA: string|null, sortieB: string|null, simule: boolean, essai: string|null, duree: number|null, journal: string|null, battement: string|null, eveille: boolean, liste: boolean, echantillonneur: string|null, carte: string|null, muet: boolean, cartes: boolean, mesures: number}}
  *   `echantillonneur` : chemin du SoundFont ; `carte` : partie du nom de la carte son ; `muet` :
- *   échantillonneur sans sortie audio ; `cartes` : lister les sorties audio.
+ *   échantillonneur sans sortie audio ; `cartes` : lister les sorties audio ; `mesures` :
+ *   période des lignes de mesures, en minutes (0 : aucune).
  * @throws {Error} Sur une option inconnue, une valeur manquante ou des options incompatibles
  *   (`--simule` avec `--echantillonneur` ; `--carte` ou `--muet` sans `--echantillonneur`).
  */
 export function parseArgs(argv) {
   const o = {
     graine: null, sortieA: null, sortieB: null, simule: false, essai: null, duree: null, journal: null, battement: null, eveille: false, liste: false,
-    echantillonneur: null, carte: null, muet: false, cartes: false,
+    echantillonneur: null, carte: null, muet: false, cartes: false, mesures: 10,
   };
   const value = (k) => { if (argv[k + 1] === undefined) throw new Error(`valeur manquante après ${argv[k]}`); return argv[k + 1]; };
   for (let k = 0; k < argv.length; k++) {
@@ -78,6 +82,7 @@ export function parseArgs(argv) {
       case '--carte': o.carte = value(k); k++; break;
       case '--muet': o.muet = true; break;
       case '--cartes': o.cartes = true; break;
+      case '--mesures': o.mesures = Number(value(k)); k++; break;
       default: throw new Error(`option inconnue : ${argv[k]}`);
     }
   }
@@ -85,6 +90,7 @@ export function parseArgs(argv) {
   if (o.simule && o.echantillonneur) throw new Error('--simule et --echantillonneur s’excluent (pour un essai sans son : --echantillonneur … --muet)');
   if ((o.carte || o.muet) && !o.echantillonneur) throw new Error('--carte et --muet ne valent qu’avec --echantillonneur');
   if (o.carte && o.muet) throw new Error('--carte et --muet s’excluent');
+  if (!(o.mesures >= 0)) throw new Error('--mesures attend un nombre de minutes (0 pour aucune)');
   return o;
 }
 
@@ -94,6 +100,35 @@ export function parseArgs(argv) {
  * @returns {string}
  */
 const mmss = (ms) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+/**
+ * Ligne de mesures du journal (option `--mesures`).
+ * @param {object} m
+ * @param {number} m.parties Parties commencées depuis le démarrage.
+ * @param {number} m.depuis Durée depuis le démarrage (ms).
+ * @param {number} m.notesActives Notes actives dans le lecteur.
+ * @param {number|null} m.retard Retard maximal des messages MIDI depuis la mesure précédente (ms),
+ *   ou null pour une sortie qui ne le mesure pas.
+ * @param {NodeJS.MemoryUsage} [m.memoire] Mémoire du processus (process.memoryUsage() par défaut).
+ * @returns {string}
+ */
+export function ligneMesures({ parties, depuis, notesActives, retard, memoire = process.memoryUsage() }) {
+  const mo = (n) => (n / 1048576).toFixed(1);
+  const heures = (depuis / 3600000).toFixed(2);
+  return `mesures : mémoire ${mo(memoire.rss)} Mo (tas ${mo(memoire.heapUsed)} Mo), ${parties} parties calculées en ${heures} h, `
+    + `${notesActives} notes actives${retard === null ? '' : `, retard maximal ${retard.toFixed(1)} ms`}`;
+}
+
+/**
+ * Nombre de démarrages déjà notés dans un journal (lignes « démarrage, graine »). Un démarrage
+ * de plus que prévu révèle une relance par launchd ou par le chien de garde.
+ * @param {string|null} journal Chemin du journal, ou null.
+ * @returns {number}
+ */
+export function demarragesPrecedents(journal) {
+  if (!journal || !existsSync(journal)) return 0;
+  return (readFileSync(journal, 'utf8').match(/ {2}démarrage, graine /g) ?? []).length;
+}
 
 /**
  * Lance l'exécuteur.
@@ -144,6 +179,10 @@ export async function main(o) {
 
   let partNo = 0;
   let partStarted = false;
+  let notesPrecedentes = 0;
+  const debut = Date.now();
+  /** Retard maximal sur toute la session (la sortie MIDI remet le sien à zéro à chaque mesure). */
+  let retardMax = 0;
   let stopping = false;
   let resolveDone;
   const done = new Promise((r) => { resolveDone = r; });
@@ -151,8 +190,12 @@ export async function main(o) {
     sink,
     onPart(score) {
       // échantillonneur : crête de la partie qui finit, pour repérer une partie restée muette
-      if (typeof sink.maxLevel === 'number' && partStarted) log(`  crête de la partie précédente : ${sink.maxLevel.toFixed(4)}`);
+      if (typeof sink.maxLevel === 'number' && partStarted) {
+        log(`  crête de la partie précédente : ${sink.maxLevel.toFixed(4)}`);
+        if (sink.maxLevel === 0 && notesPrecedentes > 0) log(`  ATTENTION : la partie précédente est restée muette malgré ${notesPrecedentes} notes`);
+      }
       if (typeof sink.maxLevel === 'number') { sink.maxLevel = 0; partStarted = true; }
+      notesPrecedentes = score.messages().filter((m) => m.kind === 'noteon' && m.data[2] > 0).length;
       const meta = score.meta ?? {};
       log(`${meta.no ? `partie ${meta.no} : ` : ''}${score.label}, ${mmss(score.seconds(score.end) * 1000)}`
         + `${meta.state !== undefined ? `, aléa ${meta.state.toString(16)}` : ''}`
@@ -163,6 +206,11 @@ export async function main(o) {
   const ticker = setInterval(() => player.tick(), 25);
   const heart = o.battement ? setInterval(() => writeFileSync(o.battement, `${new Date().toISOString()}\n`), 10000) : null;
   if (o.battement) writeFileSync(o.battement, `${new Date().toISOString()}\n`);
+  const mesures = o.mesures > 0 ? setInterval(() => {
+    const retard = typeof sink.maxLate === 'number' ? sink.maxLate : null;
+    log(ligneMesures({ parties: partNo, depuis: Date.now() - debut, notesActives: player.active.size, retard }));
+    if (retard !== null) { retardMax = Math.max(retardMax, retard); sink.maxLate = 0; }
+  }, o.mesures * 60000) : null;
 
   /**
    * Arrête proprement : coupe le son, laisse partir les derniers messages, ferme les ports.
@@ -175,11 +223,12 @@ export async function main(o) {
     player.stop();
     clearInterval(ticker);
     if (heart) clearInterval(heart);
+    if (mesures) clearInterval(mesures);
     setTimeout(async () => {
       await sink.close();
       const detail = [
         `${sink.sent} messages envoyés`,
-        ...(typeof sink.maxLate === 'number' ? [`retard maximal ${sink.maxLate.toFixed(1)} ms`] : []),
+        ...(typeof sink.maxLate === 'number' ? [`retard maximal ${Math.max(retardMax, sink.maxLate).toFixed(1)} ms`] : []),
         ...(typeof sink.maxLevel === 'number' ? [`crête de la dernière partie ${sink.maxLevel.toFixed(4)}`] : []),
       ];
       log(`arrêt (${why}) ; ${detail.join(', ')}`);
@@ -201,7 +250,8 @@ export async function main(o) {
     seed(graine);
     sharedGenerators.reset();
     const parties = gParties();
-    log(`démarrage, graine ${graine}`);
+    const n = demarragesPrecedents(o.journal) + 1;
+    log(`démarrage, graine ${graine}${n > 1 ? ` (démarrage n° ${n} de ce journal)` : ''}`);
     player.startLoop(() => {
       const state = getRandomState();
       const score = calculPartie(parties);
