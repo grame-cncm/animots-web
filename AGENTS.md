@@ -18,6 +18,9 @@ L'analyse et le plan complets sont hors du dépôt : `../Animots-Gerland-JS-anal
 | `npm run check:lisp` | compare au Lisp d'origine exécuté dans SBCL (sauté sans SBCL) |
 | `node scripts/headless.js --simule --graine 2013 --duree 60` | joue l'installation sans MIDI ni son |
 | `node scripts/build-pages.js <dossier>` | construit le site GitHub Pages en local (toutes les versions figées) |
+| `make endurance` | vieillissement accéléré : 10 000 parties (450 h) à travers le lecteur, en quelques secondes |
+| `make endurance-audio HEURES=…` | endurance audio accélérée par RustySynth, sans carte son (environ 150 fois le temps réel) |
+| `make rapport JOURNAL=…` | bilan du journal d'un long essai de l'exécuteur |
 
 ## Règles
 
@@ -33,6 +36,7 @@ L'analyse et le plan complets sont hors du dépôt : `../Animots-Gerland-JS-anal
 10. **La page fonctionne hors ligne.** Rien n'est chargé depuis le réseau (ni police, ni bibliothèque). Un fichier ajouté sous `ui/`, `core/`, `output/` ou `piece/` est mis en cache par le service worker. Les fichiers propres à Node vont dans `NOT_CACHED` (`scripts/build-pages.js`). Les identifiants de `ui/index.html` sont utilisés par `ui/app.js` et par le superviseur (`window.animotsDiagnostic`).
 11. **Git.** On ne valide que ses propres fichiers, nommés un par un, quand d'autres sessions peuvent travailler dans le même dossier. Les messages de commit expliquent le pourquoi, en français.
 12. **Historique linéaire sur `main`.** `main` n'a aucun commit de fusion (voir la section suivante).
+13. **Durée.** L'installation doit tourner des jours. Toute modification du lecteur, des séquences, de la sortie RustySynth ou de l'exécuteur se vérifie aussi par `make endurance`, et par `make endurance-audio` pour l'échantillonneur. Un nouveau mode de panne s'accompagne d'une détection (journal « ATTENTION », code de sortie 1 pour une relance par launchd) et d'un signal dans `scripts/rapport.js` (README, « Robustesse »).
 
 ## Historique de `main` : linéaire
 

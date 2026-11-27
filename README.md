@@ -22,7 +22,7 @@ Portage en JavaScript d'**Animots**, l'installation sonore du Parc de Gerland (2
 | 3 | Transpileur, 36 séquences et 6 essais générés, enchaînement des parties | **fait** |
 | 4 | Validation contre le Lisp d'origine exécuté dans SBCL | **fait** : 1 456 072 notes identiques, sauf la séquence 29 (flottants, ≤ 3,6 ms) |
 | 5 | Lecteur Web MIDI et interface | **fait** ; essayé en sortie simulée, pas encore avec Kontakt |
-| 6 | Exploitation continue : exécuteur Node headless, launchd, chien de garde | **exécuteur fait** ; test d'endurance de 72 h et essai avec Kontakt à faire |
+| 6 | Exploitation continue : exécuteur Node headless, launchd, chien de garde | **exécuteur fait** ; essais accélérés faits (450 h de parties, 12 h de son, voir « Robustesse ») ; essai réel de 72 h et essai avec Kontakt à faire |
 | — | Échantillonneur intégré (RustySynth), à la place de Kontakt | **prototype** : page et exécuteur, SoundFont du multi ; 299 échantillons du multi introuvables, pas encore essayé sur une carte 16 voies |
 
 La suite compte 248 tests (`npm test`).
@@ -50,6 +50,8 @@ npm test
 | `make web-auto` | serveur local, puis Chrome (profil dédié, autoplay permis) qui charge le SoundFont et démarre seul l'installation |
 | `make echantillonneur` | exécuteur headless par l'échantillonneur intégré, sur la sortie audio par défaut |
 | `make muet` | la même chose, sans son |
+| `make endurance`, `make endurance-audio` | essais accélérés (voir « Robustesse ») |
+| `make essai-long`, `make rapport` | essai réel de longue durée et son bilan |
 | `make rustysynth` | reconstruit le module WebAssembly depuis le sous-module `vendor/rustysynth`, puis recopie le `.wasm`, le worklet et la licence dans `output/rustysynth/` |
 
 Variables : `SF2` (par défaut `../conversion-multi/gerland.sf2`, fabriqué par `scripts/soundfont.js`), `GRAINE` (2013), `PORT` (8080). Exemple : `make web-auto GRAINE=7`.
@@ -348,6 +350,76 @@ Essais réalisés, avec le vrai Chrome sans fenêtre et un profil temporaire :
 
 Les deux premiers essais et le dernier sont dans `tests/superviseur.test.js`. L'installateur a été essayé dans un dossier personnel factice. **Rien n'est installé sur la machine**, et un fonctionnement de plusieurs jours n'a pas été essayé.
 
+## Robustesse : essais de longue durée
+
+L'installation doit tourner des jours sans intervention. Trois sortes d'essais le vérifient, et l'exécuteur se répare seul dans les cas connus.
+
+### Essais accélérés
+
+| Commande | Ce qu'elle fait | Résultat du 27 novembre 2026 |
+|---|---|---|
+| `make endurance` | le vrai lecteur joue `GRAINES` × `PARTIES` parties avec une horloge factice (`scripts/endurance.js`) | 10 000 parties, soit 450 h (18,8 jours), en 5 s : aucun arrêt, aucun trou entre parties, 78 parties vides passées, 82 notes actives au plus, tas de 4,7 à 6,3 Mo |
+| `make endurance-audio` | la même partition passe par le module RustySynth sous Node, sans carte son, et le son est vérifié (`scripts/endurance-audio.js`) | 12 h de son en 4 min 40 s (154 fois le temps réel) : aucun NaN, aucune saturation (crête 0,123), mémoire du module constante |
+
+Ce que ces essais cherchent :
+
+- `make endurance` : un arrêt de la boucle, un trou entre deux parties, une erreur de calcul inconnue (seule l'anomalie de la séquence 21 est acceptée), des notes qui s'accumulent. Sa version courte tourne dans `npm test`. Avec le lecteur d'avant la correction de la partie vide, il trouve l'arrêt dès la graine 1.
+- `make endurance-audio` : des échantillons NaN ou infinis, une mémoire du module qui grandit, la saturation, et les parties muettes malgré des notes.
+
+Sur 12 h, les **séquences 14 et 15 sont restées muettes** à chaque passage. Elles utilisent le multi m5, avec P4 sur le port B, et tous les échantillons de P4 manquent. Elles retrouveront leur son avec les échantillons.
+
+### Essai réel et bilan
+
+```bash
+make essai-long                      # 72 h, par l'échantillonneur, son compris
+make essai-long DUREE_H=96 SORTIE="--sortie-a 'IAC Bus 1' --sortie-b 'IAC Bus 2'"   # par Kontakt
+make rapport                         # bilan du journal out/essai-long.log
+```
+
+Pendant l'essai, l'exécuteur écrit toutes les 10 minutes une ligne de mesures : mémoire (RSS et tas), parties calculées, notes actives, retard maximal des messages MIDI. Chaque démarrage indique son rang dans le journal. `make rapport` en tire un bilan et signale :
+
+- une relance ;
+- un arrêt inattendu ;
+- une alerte « ATTENTION » (partie muette, rendu bloqué, repli en stéréo) ;
+- une mémoire en hausse de plus de 10 % par jour ;
+- un retard de plus de 50 ms ;
+- un journal resté muet plus de trois périodes de mesures.
+
+**À faire sur la machine de l'installation**, avec sa carte son : 72 heures pour chaque mode utilisé (page en kiosque avec Kontakt, exécuteur avec Kontakt, exécuteur avec l'échantillonneur), puis `make rapport`.
+
+### Ce qui se répare seul
+
+| Panne | Réaction |
+|---|---|
+| L'exécuteur s'arrête ou plante | launchd le relance (`KeepAlive`) |
+| L'exécuteur se fige (battement de plus de 120 s) | le chien de garde le relance |
+| Le rendu audio de l'échantillonneur se fige (plus de relevé de niveaux depuis 15 s) | l'exécuteur le note « ATTENTION » et s'arrête avec le code 1, puis launchd le relance ; dans la page, l'échantillonneur redémarre, et le superviseur voit une page « bloquée » |
+| Le contexte audio est suspendu (réveil, carte revenue) | il est relancé (toutes les 5 s dans la page) |
+| La carte son change (nombre de voies) | dans la page, l'échantillonneur redémarre et route à nouveau ses 16 voies |
+| La page ne joue pas | le superviseur bascule sur l'exécuteur headless |
+| Le réseau tombe | la page est servie par le service worker, depuis son cache |
+| Une partie dure 0 s | le lecteur la passe et enchaîne |
+
+### Pannes à provoquer pendant l'essai réel
+
+Chacune doit se voir dans le journal, puis se réparer seule :
+
+1. tuer l'exécuteur (`kill`, puis `kill -9`) : relance par launchd ;
+2. le figer (`kill -STOP`, puis attendre plus de 120 s) : relance par le chien de garde ;
+3. débrancher puis rebrancher la carte son, et l'interface MIDI ;
+4. mettre la machine en veille, puis la réveiller ;
+5. couper le réseau (version web) ;
+6. redémarrer la machine : ouverture de session automatique, puis launchd ;
+7. couper l'alimentation, si la machine sait redémarrer seule après une coupure (Réglages › Énergie).
+
+### Réglages de macOS pour une installation permanente
+
+- **Ouverture de session automatique** pour le compte de l'installation (Réglages › Utilisateurs et groupes), et redémarrage automatique après une coupure de courant.
+- **Veille** : la mise en veille de l'ordinateur désactivée, et `--eveille` (`caffeinate`) pour l'exécuteur.
+- **Mises à jour** : les mises à jour automatiques de macOS désactivées ou planifiées hors des heures d'ouverture. Pour Chrome en kiosque, prévoir de vérifier la page après chaque mise à jour (autorisation MIDI, autoplay).
+- **Notifications** : désactivées (mode Ne pas déranger permanent), pour qu'aucune fenêtre ne passe devant le kiosque.
+- **Cache du SoundFont dans la page** : le navigateur peut refuser de le garder de façon persistante (`navigator.storage.persist`), et le journal le signale. L'adresse `?sf2=…` le recharge alors au démarrage.
+
 ## Exporter une séquence en fichier MIDI
 
 ```bash
@@ -422,6 +494,9 @@ scripts/
   build-pages.js          construit le site Pages : main à la racine, chaque étiquette vX.Y figée, service workers
   soundfont.js            fusionne les 32 SF2 de ConvertWithMoss en un SoundFont pour l'échantillonneur intégré (prototype)
   rustysynth-copie.js     recopie le worklet du sous-module vendor/rustysynth dans output/rustysynth/ (make rustysynth)
+  endurance.js            vieillissement accéléré : des milliers de parties à travers le lecteur (make endurance)
+  endurance-audio.js      endurance audio accélérée par RustySynth, sans carte son (make endurance-audio)
+  rapport.js              bilan du journal d'un long essai : relances, mémoire, retard, alertes (make rapport)
   headless.js             exécuteur sans navigateur (npm run headless)
   superviseur.js          essaie la page web dans Chrome, bascule sur l'exécuteur si elle ne joue pas
 deploy/
