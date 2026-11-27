@@ -14,6 +14,14 @@
  *   nom contient NOM (un bus IAC, par exemple). Par défaut, crée les ports virtuels
  *   « Animots A » et « Animots B » ;
  * - `--simule` : aucune sortie MIDI (essai, tests) ;
+ * - `--echantillonneur FICHIER.sf2` : joue par l'échantillonneur intégré (RustySynth en
+ *   WebAssembly, dans node-web-audio-api) au lieu du MIDI : ni Kontakt ni bus IAC. Le SoundFont
+ *   est celui que fabrique `scripts/soundfont.js`. Une instance par enceinte, une voie de la carte
+ *   par instance si la carte en a 16, sinon un repli en stéréo (signalé dans le journal) ;
+ * - `--carte NOM` : avec l'échantillonneur, la carte son dont le nom contient NOM (la sortie par
+ *   défaut du système sinon) ;
+ * - `--muet` : avec l'échantillonneur, aucune sortie audio ; le rendu tourne quand même (essais) ;
+ * - `--cartes` : affiche les sorties audio du système et s'arrête ;
  * - `--essai NOM` : joue un essai (cercle1, cercle2, tutti, alterne, essai, essai1bis) puis s'arrête ;
  * - `--duree S` : s'arrête après S secondes ;
  * - `--journal FICHIER` : ajoute à ce fichier une ligne par partie (date, numéro, séquence,
@@ -25,7 +33,7 @@
  * - `--liste` : affiche les sorties MIDI du système et s'arrête.
  *
  * Arrêt propre sur SIGINT (Ctrl-C) ou SIGTERM (launchd) : coupe le son (note-off, CC123, CC120),
- * attend l'envoi des derniers messages, ferme les ports.
+ * attend l'envoi des derniers messages, ferme les ports (ou le contexte audio).
  */
 
 import { appendFileSync, writeFileSync } from 'node:fs';
@@ -37,15 +45,22 @@ import { gParties, calculPartie } from '../piece/gerland/parties.js';
 import { ESSAIS } from '../piece/gerland/sequences/index.js';
 import { Player } from '../output/player.js';
 import { ScheduledSink, openNodeMidi, listOutputs } from '../output/node-midi.js';
+import { openRustySynthNode, listAudioOutputs } from '../output/rustysynth-node.js';
 
 /**
- * Lit les options de la ligne de commande.
+ * Lit les options de la ligne de commande (voir l'en-tête du fichier).
  * @param {Array<string>} argv Arguments après le nom du script.
- * @returns {{graine: number|null, sortieA: string|null, sortieB: string|null, simule: boolean, essai: string|null, duree: number|null, journal: string|null, battement: string|null, eveille: boolean, liste: boolean}}
- * @throws {Error} Sur une option inconnue ou une valeur manquante.
+ * @returns {{graine: number|null, sortieA: string|null, sortieB: string|null, simule: boolean, essai: string|null, duree: number|null, journal: string|null, battement: string|null, eveille: boolean, liste: boolean, echantillonneur: string|null, carte: string|null, muet: boolean, cartes: boolean}}
+ *   `echantillonneur` : chemin du SoundFont ; `carte` : partie du nom de la carte son ; `muet` :
+ *   échantillonneur sans sortie audio ; `cartes` : lister les sorties audio.
+ * @throws {Error} Sur une option inconnue, une valeur manquante ou des options incompatibles
+ *   (`--simule` avec `--echantillonneur` ; `--carte` ou `--muet` sans `--echantillonneur`).
  */
 export function parseArgs(argv) {
-  const o = { graine: null, sortieA: null, sortieB: null, simule: false, essai: null, duree: null, journal: null, battement: null, eveille: false, liste: false };
+  const o = {
+    graine: null, sortieA: null, sortieB: null, simule: false, essai: null, duree: null, journal: null, battement: null, eveille: false, liste: false,
+    echantillonneur: null, carte: null, muet: false, cartes: false,
+  };
   const value = (k) => { if (argv[k + 1] === undefined) throw new Error(`valeur manquante après ${argv[k]}`); return argv[k + 1]; };
   for (let k = 0; k < argv.length; k++) {
     switch (argv[k]) {
@@ -59,10 +74,17 @@ export function parseArgs(argv) {
       case '--battement': o.battement = value(k); k++; break;
       case '--eveille': o.eveille = true; break;
       case '--liste': o.liste = true; break;
+      case '--echantillonneur': o.echantillonneur = value(k); k++; break;
+      case '--carte': o.carte = value(k); k++; break;
+      case '--muet': o.muet = true; break;
+      case '--cartes': o.cartes = true; break;
       default: throw new Error(`option inconnue : ${argv[k]}`);
     }
   }
   if (o.essai && !ESSAIS[o.essai]) throw new Error(`essai inconnu : ${o.essai} (${Object.keys(ESSAIS).join(', ')})`);
+  if (o.simule && o.echantillonneur) throw new Error('--simule et --echantillonneur s’excluent (pour un essai sans son : --echantillonneur … --muet)');
+  if ((o.carte || o.muet) && !o.echantillonneur) throw new Error('--carte et --muet ne valent qu’avec --echantillonneur');
+  if (o.carte && o.muet) throw new Error('--carte et --muet s’excluent');
   return o;
 }
 
@@ -84,6 +106,11 @@ export async function main(o) {
     console.log(names.length ? names.map((n) => `  ${n}`).join('\n') : '  (aucune sortie MIDI)');
     return;
   }
+  if (o.cartes) {
+    const outs = await listAudioOutputs();
+    console.log(outs.length ? outs.map((d) => `  ${d.label}`).join('\n') : '  (aucune sortie audio)');
+    return;
+  }
 
   /**
    * Écrit une ligne sur la console et dans le journal.
@@ -96,11 +123,19 @@ export async function main(o) {
     if (o.journal) appendFileSync(o.journal, `${line}\n`);
   };
 
-  const sink = o.simule
-    ? Object.assign(new ScheduledSink({ sendNow: () => {}, ports: () => [0, 1] }), { names: ['simulé', 'simulé'], close() { this.stopTimer(); } })
-    : await openNodeMidi({ targets: [o.sortieA, o.sortieB] });
-  if (o.simule) sink.start();
-  log(`sorties : port A -> ${sink.names[0]}, port B -> ${sink.names[1]}`);
+  let sink;
+  if (o.echantillonneur) {
+    sink = await openRustySynthNode({ soundFont: o.echantillonneur, carte: o.carte, muet: o.muet });
+    log(`échantillonneur : ${o.echantillonneur} (${sink.presets} presets, gain ${sink.gainDb} dB), carte : ${sink.carte}`);
+    if (sink.separees) log(`16 voies séparées, une par enceinte (la carte en a ${sink.max})`);
+    else log(`ATTENTION : la carte n'a que ${sink.max} voies, les 16 enceintes sont repliées en stéréo (impaires à gauche, paires à droite)`);
+  } else if (o.simule) {
+    sink = Object.assign(new ScheduledSink({ sendNow: () => {}, ports: () => [0, 1] }), { names: ['simulé', 'simulé'], close() { this.stopTimer(); } });
+    sink.start();
+  } else {
+    sink = await openNodeMidi({ targets: [o.sortieA, o.sortieB] });
+  }
+  if (!o.echantillonneur) log(`sorties : port A -> ${sink.names[0]}, port B -> ${sink.names[1]}`);
   if (o.eveille) {
     // caffeinate s'arrête de lui-même quand ce processus se termine (-w)
     spawn('caffeinate', ['-dimsu', '-w', String(process.pid)], { stdio: 'ignore', detached: true }).unref();
@@ -108,12 +143,16 @@ export async function main(o) {
   }
 
   let partNo = 0;
+  let partStarted = false;
   let stopping = false;
   let resolveDone;
   const done = new Promise((r) => { resolveDone = r; });
   const player = new Player({
     sink,
     onPart(score) {
+      // échantillonneur : crête de la partie qui finit, pour repérer une partie restée muette
+      if (typeof sink.maxLevel === 'number' && partStarted) log(`  crête de la partie précédente : ${sink.maxLevel.toFixed(4)}`);
+      if (typeof sink.maxLevel === 'number') { sink.maxLevel = 0; partStarted = true; }
       const meta = score.meta ?? {};
       log(`${meta.no ? `partie ${meta.no} : ` : ''}${score.label}, ${mmss(score.seconds(score.end) * 1000)}`
         + `${meta.state !== undefined ? `, aléa ${meta.state.toString(16)}` : ''}`
@@ -136,9 +175,14 @@ export async function main(o) {
     player.stop();
     clearInterval(ticker);
     if (heart) clearInterval(heart);
-    setTimeout(() => {
-      sink.close();
-      log(`arrêt (${why}) ; ${sink.sent} messages envoyés, retard maximal ${sink.maxLate.toFixed(1)} ms`);
+    setTimeout(async () => {
+      await sink.close();
+      const detail = [
+        `${sink.sent} messages envoyés`,
+        ...(typeof sink.maxLate === 'number' ? [`retard maximal ${sink.maxLate.toFixed(1)} ms`] : []),
+        ...(typeof sink.maxLevel === 'number' ? [`crête de la dernière partie ${sink.maxLevel.toFixed(4)}`] : []),
+      ];
+      log(`arrêt (${why}) ; ${detail.join(', ')}`);
       resolveDone();
     }, player.lookahead + 100);
   }

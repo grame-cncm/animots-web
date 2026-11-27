@@ -138,8 +138,12 @@ export class RustySynthSink {
     this.toAudioTime = toAudioTime;
     /** Messages ignorés, faute d'instance pour leur port. */
     this.dropped = 0;
+    /** Messages de la partition transmis au worklet. */
+    this.sent = 0;
     /** @type {Array<number>} Crête de chaque instance sur le dernier dixième de seconde, renvoyée par le worklet. */
     this.peaks = new Array(INSTANCES).fill(0);
+    /** Crête la plus forte relevée depuis la création de la sortie. */
+    this.maxLevel = 0;
   }
 
   /**
@@ -147,6 +151,16 @@ export class RustySynthSink {
    * @returns {number}
    */
   level() { return Math.max(...this.peaks); }
+
+  /**
+   * Reçoit un relevé de niveaux du worklet (environ dix par seconde).
+   * @param {ArrayLike<number>} peaks Crête de chaque instance.
+   * @returns {void}
+   */
+  setPeaks(peaks) {
+    this.peaks = Array.from(peaks);
+    this.maxLevel = Math.max(this.maxLevel, this.level());
+  }
 
   /**
    * Charge l'échantillonneur et renvoie la sortie prête à jouer.
@@ -179,7 +193,7 @@ export class RustySynthSink {
     const presets = await ready;
     const { separees, max } = connectOutput(ctx, node, INSTANCES);
     const sink = new RustySynthSink(node, (ms) => audioTime(ctx, ms));
-    node.port.onmessage = (e) => { if (e.data.type === 'levels') sink.peaks = Array.from(e.data.peaks); };
+    node.port.onmessage = (e) => { if (e.data.type === 'levels') sink.setPeaks(e.data.peaks); };
     node.port.postMessage({ type: 'volume', value: DEFAULT_MASTER_VOLUME * 10 ** (gainDb / 20) });
     for (let i = 0; i < INSTANCES; i++) {
       for (const data of initMessages(i)) node.port.postMessage({ type: 'midi', time: 0, instance: i, data });
@@ -197,6 +211,7 @@ export class RustySynthSink {
   send(port, data, time) {
     const out = route(port, data);
     if (!out.length) { this.dropped++; return; }
+    this.sent++;
     const t = this.toAudioTime(time);
     for (const r of out) this.node.port.postMessage({ type: 'midi', time: t, instance: r.instance, data: r.data });
   }

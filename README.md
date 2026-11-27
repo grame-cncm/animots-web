@@ -153,8 +153,45 @@ Les tests (`tests/soundfont.test.js`) font jouer à RustySynth un SoundFont fusi
 
 - une carte à 16 voies ;
 - l'écoute du résultat, comparée à Kontakt ;
-- l'exécuteur Node, avec node-web-audio-api ;
 - l'endurance.
+
+#### Sous Node : l'exécuteur headless avec l'échantillonneur
+
+L'exécuteur headless peut jouer par l'échantillonneur intégré au lieu du MIDI. Il n'a alors besoin ni de Chrome, ni de Kontakt, ni des bus IAC, et aucun clic n'est nécessaire pour lancer le son. Il charge le même worklet et le même module WebAssembly que la page, dans [node-web-audio-api](https://github.com/ircam-ismm/node-web-audio-api) (IRCAM, BSD-3). Comme `@julusian/midi`, ce paquet est une dépendance facultative, installée par `npm install` (`output/rustysynth-node.js`).
+
+```bash
+npm run headless -- --cartes                                          # sorties audio du système
+npm run headless -- --echantillonneur gerland.sf2 --carte "MOTU"      # joue sur la carte dont le nom contient MOTU
+npm run headless -- --echantillonneur gerland.sf2 --muet --duree 45   # essai sans son
+```
+
+| Option | Effet |
+|---|---|
+| `--echantillonneur FICHIER.sf2` | joue par l'échantillonneur intégré, avec le SoundFont fabriqué par `scripts/soundfont.js` |
+| `--carte NOM` | carte son dont le nom contient NOM (la sortie par défaut du système sinon) |
+| `--muet` | aucune sortie audio : le rendu tourne quand même (essais) |
+| `--cartes` | affiche les sorties audio et s'arrête |
+
+`--simule` et `--echantillonneur` s'excluent. Le journal indique la carte, puis soit « 16 voies séparées », soit un avertissement quand la carte en a moins et que les enceintes sont repliées en stéréo. Il note aussi la crête de chaque partie, ce qui permet de repérer une partie restée muette. À l'arrêt, il donne le nombre de messages envoyés.
+
+**Essayé** sous Node 22, avec une sortie muette :
+
+```bash
+node scripts/headless.js --echantillonneur ../conversion-multi/gerland.sf2 --muet --graine 2013 --duree 45
+```
+
+- 32 voies annoncées, donc 16 voies séparées ;
+- la séquence 1 reste muette (crête 0,0000), puis la séquence 29 sonne (crête 0,0396) ;
+- 248 messages envoyés en 45 s.
+
+Le test `tests/headless.test.js` joue de la même façon un SoundFont fabriqué. Il est sauté si node-web-audio-api manque. node-web-audio-api ne sait pas encore donner `getOutputTimestamp` : l'heure se cale alors sur `currentTime`.
+
+**Pas encore essayé :**
+
+- une vraie carte à 16 voies : cette machine n'a que des sorties stéréo ;
+- l'écoute par les haut-parleurs ;
+- l'endurance ;
+- les pauses du ramasse-miettes : le worklet tourne dans un fil JavaScript. Le module WebAssembly n'alloue rien pendant le rendu, mais le worklet crée de petits tableaux (file des messages, relevés de niveau).
 
 ## Exploitation sans navigateur : l'exécuteur headless (phase 6)
 
@@ -339,6 +376,7 @@ output/
   webmidi.js              sortie Web MIDI (ports A et B reliés à des sorties du système)
   simulated.js            sortie simulée (aucun son, sert à l'affichage et aux essais)
   rustysynth.js           sortie vers l'échantillonneur intégré (prototype, branche rustysynth)
+  rustysynth-node.js      échantillonneur intégré sous Node (node-web-audio-api), pour l'exécuteur headless
   rustysynth/             worklet et module WebAssembly de RustySynth (copiés, ne pas modifier ici)
   ticker.js, ticker-worker.js  battement de l'ordonnanceur (Worker, ou setInterval en repli)
   smf.js                  export en fichier MIDI standard, et relecture pour vérification

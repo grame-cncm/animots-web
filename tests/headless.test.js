@@ -1,6 +1,7 @@
 /**
  * @file Tests de l'exécuteur headless : file d'attente datée de la sortie Node
- * (output/node-midi.js), options et sessions simulées de scripts/headless.js.
+ * (output/node-midi.js), options et sessions simulées de scripts/headless.js, et échantillonneur
+ * intégré sous Node, muet (sauté si node-web-audio-api manque).
  *
  * Les sessions simulées n'ouvrent aucun port MIDI : les tests ne touchent pas à la configuration
  * MIDI de la machine. L'essai avec de vrais ports virtuels CoreMIDI se fait à la main (README).
@@ -9,12 +10,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ScheduledSink } from '../output/node-midi.js';
 import { parseArgs } from '../scripts/headless.js';
+import { writeSoundFont, mergeGerland } from '../scripts/soundfont.js';
+import { convertWithMossFile } from './soundfont-fixture.js';
 
 const SCRIPT = fileURLToPath(new URL('../scripts/headless.js', import.meta.url));
 
@@ -73,10 +76,50 @@ test('parseArgs : options et erreurs', () => {
   assert.deepEqual(parseArgs(['--graine', '2013', '--sortie-a', 'IAC Bus 1', '--simule', '--duree', '5', '--eveille']), {
     graine: 2013, sortieA: 'IAC Bus 1', sortieB: null, simule: true, essai: null, duree: 5,
     journal: null, battement: null, eveille: true, liste: false,
+    echantillonneur: null, carte: null, muet: false, cartes: false,
   });
   assert.throws(() => parseArgs(['--inconnue']), /option inconnue/);
   assert.throws(() => parseArgs(['--graine']), /valeur manquante/);
   assert.throws(() => parseArgs(['--essai', 'rien']), /essai inconnu/);
+});
+
+test('parseArgs : échantillonneur intégré, carte, muet, liste des cartes, et incompatibilités', () => {
+  const o = parseArgs(['--echantillonneur', 'gerland.sf2', '--carte', 'MOTU']);
+  assert.equal(o.echantillonneur, 'gerland.sf2');
+  assert.equal(o.carte, 'MOTU');
+  assert.equal(o.muet, false);
+  assert.equal(parseArgs(['--echantillonneur', 'g.sf2', '--muet']).muet, true);
+  assert.equal(parseArgs(['--cartes']).cartes, true);
+  assert.throws(() => parseArgs(['--echantillonneur']), /valeur manquante/);
+  assert.throws(() => parseArgs(['--simule', '--echantillonneur', 'g.sf2']), /--simule et --echantillonneur s’excluent/);
+  assert.throws(() => parseArgs(['--muet']), /ne valent qu’avec --echantillonneur/);
+  assert.throws(() => parseArgs(['--carte', 'MOTU']), /ne valent qu’avec --echantillonneur/);
+  assert.throws(() => parseArgs(['--echantillonneur', 'g.sf2', '--carte', 'X', '--muet']), /s’excluent/);
+});
+
+/** node-web-audio-api est une dépendance facultative : sans lui, l'essai de l'échantillonneur est sauté. */
+const webAudio = await import('node-web-audio-api').then(() => true, () => false);
+
+test('échantillonneur muet sous Node : un SoundFont fabriqué, un essai joué, une crête non nulle', { skip: !webAudio && 'node-web-audio-api absent' }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'animots-'));
+  try {
+    const sf2 = join(dir, 'test.sf2');
+    writeFileSync(sf2, writeSoundFont(mergeGerland([{ name: 'ProgA1', read: () => convertWithMossFile('ProgA1') }]).soundFont));
+    const r = spawnSync(process.execPath, [SCRIPT, '--echantillonneur', sf2, '--muet', '--essai', 'alterne', '--duree', '2'], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /échantillonneur : .*test\.sf2 \(6 presets, gain 3 dB\), carte : aucune \(muet\)/);
+    assert.match(r.stdout, /16 voies séparées/);
+    const crete = Number(/crête de la dernière partie ([\d.]+)/.exec(r.stdout)?.[1]);
+    assert.ok(crete > 0.001, `crête nulle :\n${r.stdout}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('échantillonneur : un SoundFont introuvable donne un message clair et le code 1', { skip: !webAudio && 'node-web-audio-api absent' }, () => {
+  const r = spawnSync(process.execPath, [SCRIPT, '--echantillonneur', '/nulle/part.sf2', '--muet', '--duree', '1'], { encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /animots : .*nulle\/part\.sf2/);
 });
 
 test('session simulée : parties journalisées, battement écrit, arrêt propre', () => {

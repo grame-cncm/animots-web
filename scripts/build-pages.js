@@ -35,7 +35,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const APP_PATHS = ['index.html', '.nojekyll', 'ui', 'core', 'output', 'piece'];
 
 /** Fichiers publiés mais non mis en cache : inutiles au navigateur. */
-const NOT_CACHED = new Set(['.nojekyll', 'output/node-midi.js']);
+const NOT_CACHED = new Set(['.nojekyll', 'output/node-midi.js', 'output/rustysynth-node.js']);
 
 /**
  * Liste récursive des fichiers d'un dossier, chemins relatifs avec des `/`.
