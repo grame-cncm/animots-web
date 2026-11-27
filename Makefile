@@ -4,12 +4,14 @@ SF2 ?= ../conversion-multi/gerland.sf2
 GRAINE ?= 2013
 PORT ?= 8080
 RUSTYSYNTH := vendor/rustysynth
+GRAINES ?= 50
+PARTIES ?= 200
 CHROME ?= /Applications/Google Chrome.app
 # profil Chrome dédié : n'interfère ni avec le Chrome habituel ni avec le profil du kiosque
 PROFIL ?= $(HOME)/Library/Application Support/Animots/Chrome-web-auto
 
 .DEFAULT_GOAL := help
-.PHONY: help echantillonneur muet web web-auto rustysynth
+.PHONY: help echantillonneur muet web web-auto rustysynth endurance
 
 help: ## Affiche cette aide
 	@echo "Cibles :"
@@ -47,3 +49,6 @@ rustysynth: ## Reconstruit le module WebAssembly depuis le sous-module vendor/ru
 	cp $(RUSTYSYNTH)/target/wasm32-unknown-unknown/release/rustysynth_wasm.wasm output/rustysynth/
 	cp $(RUSTYSYNTH)/LICENSE.txt output/rustysynth/LICENSE.txt
 	node scripts/rustysynth-copie.js
+
+endurance: ## Vieillissement accéléré : GRAINES × PARTIES parties à travers le lecteur (≈ 450 h par défaut, en secondes)
+	node --expose-gc scripts/endurance.js --graines $(GRAINES) --parties $(PARTIES)
