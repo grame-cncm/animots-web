@@ -23,6 +23,7 @@ import { SimulatedSink } from '../output/simulated.js';
 import { startTicker } from '../output/ticker.js';
 import { toSMF } from '../output/smf.js';
 import { RustySynthSink } from '../output/rustysynth.js';
+import { ZONE1, ZONE2, ZONE3 } from '../piece/gerland/config.js';
 
 /**
  * Élément de la page par identifiant.
@@ -68,7 +69,10 @@ function mmss(ms) {
  */
 function journal(text, alerte = false) {
   const li = document.createElement('li');
-  li.textContent = `${new Date().toLocaleTimeString('fr-FR')}  ${text}`;
+  const heure = document.createElement('span');
+  heure.className = 'heure';
+  heure.textContent = new Date().toLocaleTimeString('fr-FR');
+  li.append(heure, document.createTextNode(text));
   if (alerte) li.className = 'alerte';
   const list = $('journal');
   list.prepend(li);
@@ -436,15 +440,29 @@ $('exporter').addEventListener('click', () => {
 
 // ________________________________________________________ affichage
 
+// Les 16 enceintes, groupées par zone du parc (*zone1* à *zone3* de Gerland2013-4.lsp), et
+// rangées par numéro dans chaque zone. `cells[n]` reste l'enceinte n (canal n + 1).
+/** @type {Array<HTMLElement>} */
 const cells = [];
-for (let n = 0; n < 16; n++) {
-  const cell = document.createElement('div');
-  cell.className = 'enceinte';
-  cell.innerHTML = `<span>${n + 1}</span>`;
-  cell.title = `Enceinte ${n + 1} : canal ${n + 1} des ports A et B`;
-  cell.addEventListener('animationend', () => cell.classList.remove('attaque'));
-  $('enceintes').append(cell);
-  cells.push(cell);
+for (const [nom, zone] of [['Nord', ZONE1], ['Centre', ZONE2], ['Sud', ZONE3]]) {
+  const bloc = document.createElement('div');
+  bloc.className = 'zone';
+  const titre = document.createElement('span');
+  titre.className = 'etiquette';
+  titre.textContent = `Zone ${nom.toLowerCase()}`;
+  const grille = document.createElement('div');
+  grille.className = 'zone-enceintes';
+  for (const n of [...zone].sort((a, b) => a - b)) {
+    const cell = document.createElement('div');
+    cell.className = 'enceinte';
+    cell.innerHTML = `<span>${n + 1}</span>`;
+    cell.title = `Enceinte ${n + 1} (zone ${nom.toLowerCase()}) : canal ${n + 1} des ports A et B`;
+    cell.addEventListener('animationend', () => cell.classList.remove('attaque'));
+    grille.append(cell);
+    cells[n] = cell;
+  }
+  bloc.append(titre, grille);
+  $('enceintes').append(bloc);
 }
 
 /**
@@ -484,6 +502,9 @@ setInterval(() => {
   $('sequence').textContent = p?.score.label ?? '—';
   $('duree').textContent = p ? mmss(t - p.start) : '—';
   $('duree-totale').textContent = p ? mmss(p.end - p.start) : '—';
+  const avance = p ? Math.min(100, Math.max(0, (100 * (t - p.start)) / Math.max(1, p.end - p.start))) : 0;
+  /** @type {HTMLElement} */ ($('progression').firstElementChild).style.width = `${avance}%`;
+  $('progression').setAttribute('aria-valuenow', String(Math.round(avance)));
   const on = sim.soundingAt(t);
   cells.forEach((cell, n) => {
     cell.classList.toggle('a', on.has(`0:${n}`));

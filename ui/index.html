@@ -15,7 +15,7 @@
 
   <main>
     <section class="panneau" aria-labelledby="t-sortie">
-      <h2 id="t-sortie">Sortie MIDI</h2>
+      <h2 id="t-sortie">Sortie</h2>
       <p id="midi-statut" class="note">Recherche des sorties MIDI…</p>
       <div class="ports">
         <label>Port A <select id="port-a"></select></label>
@@ -53,9 +53,12 @@
         <div><span class="etiquette">Durée en cours</span><strong id="duree">—</strong></div>
         <div><span class="etiquette">Durée totale</span><strong id="duree-totale">—</strong></div>
       </div>
-      <div id="enceintes" class="enceintes" aria-label="Enceintes qui jouent"></div>
-      <p class="note legende"><span class="pastille a"></span> port A <span class="pastille b"></span> port B</p>
-      <button id="exporter">Exporter la partie en cours (.mid)</button>
+      <div class="progression" id="progression" role="progressbar" aria-label="Avancement de la partie" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <div id="enceintes" class="enceintes" aria-label="Enceintes qui jouent, par zone du parc"></div>
+      <div class="pied-encours">
+        <p class="note legende"><span class="pastille a"></span> port A <span class="pastille b"></span> port B</p>
+        <button id="exporter">Exporter la partie en cours (.mid)</button>
+      </div>
     </section>
 
     <section class="panneau large" aria-labelledby="t-journal">
