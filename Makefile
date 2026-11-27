@@ -6,12 +6,13 @@ PORT ?= 8080
 RUSTYSYNTH := vendor/rustysynth
 GRAINES ?= 50
 PARTIES ?= 200
+HEURES ?= 24
 CHROME ?= /Applications/Google Chrome.app
 # profil Chrome dédié : n'interfère ni avec le Chrome habituel ni avec le profil du kiosque
 PROFIL ?= $(HOME)/Library/Application Support/Animots/Chrome-web-auto
 
 .DEFAULT_GOAL := help
-.PHONY: help echantillonneur muet web web-auto rustysynth endurance
+.PHONY: help echantillonneur muet web web-auto rustysynth endurance endurance-audio
 
 help: ## Affiche cette aide
 	@echo "Cibles :"
@@ -52,3 +53,6 @@ rustysynth: ## Reconstruit le module WebAssembly depuis le sous-module vendor/ru
 
 endurance: ## Vieillissement accéléré : GRAINES × PARTIES parties à travers le lecteur (≈ 450 h par défaut, en secondes)
 	node --expose-gc scripts/endurance.js --graines $(GRAINES) --parties $(PARTIES)
+
+endurance-audio: ## Endurance audio accélérée : HEURES heures rendues par RustySynth sans carte son (≈ 160 fois le temps réel)
+	node scripts/endurance-audio.js --sf2 $(SF2) --heures $(HEURES) --graine $(GRAINE)
